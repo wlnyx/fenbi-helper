@@ -91,7 +91,7 @@
             <div v-if="expandedId === q.id" class="q-detail">
               <el-skeleton v-if="detailLoading" :rows="4" animated />
               <template v-else-if="detail">
-                <div v-if="detail.question.material" class="dq-material">{{ detail.question.material }}</div>
+                <div v-if="detail.question.material" class="dq-material" v-html="detail.question.material"></div>
                 <div class="dq-content" v-html="detail.question.content"></div>
 
                 <el-alert v-if="detail.answered" :type="detail.isCorrect ? 'success' : 'error'" :closable="false"
@@ -105,7 +105,7 @@
                      }"
                      @click="!detail.answered && answer(i)">
                   <span class="opt-letter">{{ letter(i) }}.</span>
-                  <span>{{ opt }}</span>
+                  <span v-html="opt"></span>
                   <el-icon v-if="detail.answered && isRightChoice(i)" color="#0D9488"><CircleCheckFilled /></el-icon>
                   <el-icon v-if="detail.answered && !isRightChoice(i) && i === detail.myChoice" color="#DC2626"><CircleCloseFilled /></el-icon>
                 </div>
@@ -324,4 +324,9 @@ onMounted(load)
 .dq-opt.wrong { background: #FEF2F2; color: var(--el-color-danger); border-color: #FECACA; }
 .opt-letter { font-weight: 600; flex-shrink: 0; }
 .dq-sol :deep(p) { margin-bottom: 8px; }
+</style>
+
+<style scoped>
+.dq-opt :deep(img), .dq-content :deep(img), .q-detail :deep(img) { max-width: 100%; vertical-align: middle; }
+.dq-opt :deep(p) { margin: 0; }
 </style>

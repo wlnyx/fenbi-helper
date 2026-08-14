@@ -1,3 +1,5 @@
 fenbi-workbench
 .data/
 *.log
+dist/
+internal/web/dist/

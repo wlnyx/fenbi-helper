@@ -4,9 +4,9 @@
     <el-skeleton :loading="loading" animated :rows="10">
       <template #default>
         <!-- 统计 -->
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px;">
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-bottom:20px;">
           <div v-for="k in kpis" :key="k.label" class="bento-card" style="text-align:center;padding:18px 12px;">
-            <div class="kpi-num">{{ k.value }}</div>
+            <div class="kpi-num" :style="{ fontSize: k.big ? '28px' : '22px' }">{{ k.value }}</div>
             <div class="kpi-label">{{ k.label }}</div>
           </div>
         </div>
@@ -83,66 +83,139 @@ let diffChartInst = null
 
 const kpis = computed(() => {
   const r = report.value
-  const rate = r.answerCount > 0 ? (r.correctCount / r.answerCount * 100).toFixed(1) : '-'
+  const n = r.answerCount || 0
+  const rate = n > 0 ? (r.correctCount / n * 100).toFixed(1) : '-'
+  const avg = n > 0 && r.elapsedTime ? (r.elapsedTime / n).toFixed(0) : '-'
   return [
-    { label: '做题数', value: r.answerCount ?? '-' },
-    { label: '正确数', value: r.correctCount ?? '-' },
-    { label: '正确率', value: r.answerCount ? rate + '%' : '-' },
-    { label: '总耗时', value: r.elapsedTime != null ? r.elapsedTime + 's' : '-' }
+    { label: '做题数', value: n, big: true },
+    { label: '正确数', value: r.correctCount ?? '-', big: false },
+    { label: '正确率', value: n ? rate + '%' : '-', big: false },
+    { label: '平均耗时', value: avg != '-' ? avg + 's/题' : '-', big: false },
+    { label: '累计耗时', value: r.elapsedTime != null ? fmtDur(r.elapsedTime) : '-', big: false }
   ]
 })
+
+const fmtDur = (sec) => {
+  const m = Math.floor(sec / 60)
+  const s = sec % 60
+  return m > 0 ? `${m}分${s}秒` : `${s}秒`
+}
 
 function renderCharts() {
   const data = items.value
   if (!data.length) return
 
-  // 图1：单题耗时柱状（对绿错红 + 80分位线 + 累计耗时）
+  const C_OK = '#0D9488'
+  const C_BAD = '#DC2626'
+  const C_ACCENT = '#EA580C'
+  const C_PURPLE = '#6D28D9'
+
+  // 图1：单题耗时横向条形（每行一题，对错着色 + 平均/80分位参考线）
   const costs = data.map(d => d.cost || 0)
   const sorted = [...costs].sort((a, b) => a - b)
   const p80 = sorted[Math.floor(sorted.length * 0.8)] || 0
-  const cumulative = []
-  let acc = 0
-  costs.forEach(c => { acc += c; cumulative.push(acc) })
+  const avg = Math.round(costs.reduce((a, b) => a + b, 0) / costs.length) || 0
 
   costChartInst = echarts.init(costChart.value)
   costChartInst.setOption({
-    tooltip: { trigger: 'axis' },
-    legend: { data: ['单题耗时', '累计耗时'], top: 0 },
-    grid: [{ left: 40, right: 50, top: 30, height: '62%' }, { left: 40, right: 50, top: '76%', height: '18%' }],
-    xAxis: [{ type: 'category', data: data.map(d => d.idx), gridIndex: 0 },
-            { type: 'category', data: data.map(d => d.idx), gridIndex: 1 }],
-    yAxis: [{ type: 'value', name: '耗时(s)', gridIndex: 0 },
-            { type: 'value', name: '累计(s)', gridIndex: 1, inverse: true }],
-    series: [
-      {
-        name: '单题耗时', type: 'bar', data: data.map(d => ({
-          value: d.cost,
-          itemStyle: { color: d.correct ? '#0D9488' : '#DC2626', borderRadius: [3, 3, 0, 0] }
-        })),
-        markLine: { symbol: 'none', data: [{ yAxis: p80, label: { formatter: '80分位 ' + p80 + 's' } }],
-                    lineStyle: { color: '#EA580C', type: 'dashed' } }
-      },
-      { name: '累计耗时', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: cumulative,
-        lineStyle: { color: '#6D28D9', width: 1.5 }, itemStyle: { color: '#6D28D9' } }
-    ]
+    animationDuration: 800,
+    animationEasing: 'cubicOut',
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      backgroundColor: 'rgba(29,29,31,.92)',
+      borderWidth: 0,
+      textStyle: { color: '#fff', fontSize: 12 },
+      formatter: (params) => {
+        const d = data[params[0].dataIndex]
+        return `<b>第 ${d.idx} 题</b><br/>耗时：${d.cost}s<br/>结果：${d.correct ? '✓ 正确' : '✗ 错误'}<br/>难度：${d.difficulty}/10`
+      }
+    },
+    legend: {
+      data: [{ name: '正确', itemStyle: { color: C_OK } }, { name: '错误', itemStyle: { color: C_BAD } }],
+      top: 0, icon: 'circle', itemWidth: 8, textStyle: { fontSize: 12 }
+    },
+    grid: { left: 52, right: 64, top: 30, bottom: 24 },
+    xAxis: {
+      type: 'value', name: '耗时(s)', nameTextStyle: { fontSize: 10, color: '#86868B' },
+      axisLabel: { fontSize: 10, color: '#86868B' }, splitLine: { lineStyle: { color: '#F0F0F4' } }
+    },
+    yAxis: {
+      type: 'category', inverse: true,
+      data: data.map(d => '第' + d.idx + '题'),
+      axisLine: { show: false }, axisTick: { show: false },
+      axisLabel: { fontSize: 11, color: '#3a3a3c' }
+    },
+    series: [{
+      name: '正确', type: 'bar', stack: 't', barWidth: 14,
+      data: data.map(d => d.correct ? d.cost : null),
+      itemStyle: { color: C_OK, borderRadius: [0, 4, 4, 0] },
+      label: { show: true, position: 'right', fontSize: 10, color: '#3a3a3c', formatter: (p) => p.value != null ? p.value + 's' : '' },
+      markLine: {
+        symbol: 'none', silent: true,
+        label: { fontSize: 10, color: '#3a3a3c' },
+        data: [
+          { xAxis: avg, label: { formatter: '平均 ' + avg + 's', position: 'insideEndTop', color: C_OK },
+            lineStyle: { color: C_OK, type: 'dashed', width: 1 } },
+          { xAxis: p80, label: { formatter: '80分位 ' + p80 + 's', position: 'insideEndTop', color: C_ACCENT },
+            lineStyle: { color: C_ACCENT, type: 'dashed', width: 1 } }
+        ]
+      }
+    }, {
+      name: '错误', type: 'bar', stack: 't', barWidth: 14,
+      data: data.map(d => !d.correct ? d.cost : null),
+      itemStyle: { color: C_BAD, borderRadius: [0, 4, 4, 0] },
+      label: { show: true, position: 'right', fontSize: 10, color: '#3a3a3c', formatter: (p) => p.value != null ? p.value + 's' : '' }
+    }]
   })
 
   // 图2：难度柱状 + 正确率线（双轴）
+  const hasRatio = data.some(d => d.correctRatio > 0)
   diffChartInst = echarts.init(diffChart.value)
   diffChartInst.setOption({
-    tooltip: { trigger: 'axis' },
-    legend: { data: ['难度', '正确率'], top: 0 },
-    grid: { left: 40, right: 50, top: 30, bottom: 30 },
-    xAxis: { type: 'category', data: data.map(d => d.idx) },
+    animationDuration: 800,
+    animationEasing: 'cubicOut',
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: 'rgba(29,29,31,.92)',
+      borderWidth: 0,
+      textStyle: { color: '#fff', fontSize: 12 },
+      formatter: (params) => {
+        const d = data[params[0].dataIndex]
+        return `<b>第 ${d.idx} 题</b><br/>难度：${d.difficulty}/10<br/>${hasRatio ? '全网正确率：' + d.correctRatio.toFixed(1) + '%' : ''}`
+      }
+    },
+    legend: { data: ['难度', '全网正确率'], top: 0, icon: 'circle', itemWidth: 8, textStyle: { fontSize: 12 } },
+    grid: { left: 44, right: 56, top: 34, bottom: 30 },
+    xAxis: {
+      type: 'category', data: data.map(d => d.idx),
+      axisLine: { lineStyle: { color: '#E8E8ED' } }, axisTick: { show: false },
+      axisLabel: { fontSize: 10, color: '#86868B' }
+    },
     yAxis: [
-      { type: 'value', name: '难度', min: 0, max: 10 },
-      { type: 'value', name: '正确率%', min: 0, max: 100 }
+      { type: 'value', name: '难度', min: 0, max: 10, nameTextStyle: { fontSize: 10, color: '#86868B' },
+        axisLabel: { fontSize: 10, color: '#86868B' }, splitLine: { lineStyle: { color: '#F0F0F4' } } },
+      { type: 'value', name: '正确率%', min: 0, max: 100,
+        nameTextStyle: { fontSize: 10, color: '#86868B' }, axisLabel: { fontSize: 10, color: '#86868B' },
+        splitLine: { show: false } }
     ],
     series: [
-      { name: '难度', type: 'bar', data: data.map(d => d.difficulty || 0),
-        itemStyle: { color: '#0D9488', borderRadius: [3, 3, 0, 0] } },
-      { name: '正确率', type: 'line', yAxisIndex: 1, data: data.map(() => null),
-        lineStyle: { color: '#EA580C', width: 2 }, itemStyle: { color: '#EA580C' } }
+      {
+        name: '难度', type: 'bar', barWidth: '45%',
+        data: data.map(d => ({
+          value: d.difficulty || 0,
+          itemStyle: {
+            color: d.difficulty >= 7 ? 'rgba(220,38,38,.75)' : (d.difficulty <= 4 ? 'rgba(13,148,136,.85)' : 'rgba(180,83,9,.75)'),
+            borderRadius: [4, 4, 0, 0]
+          }
+        }))
+      },
+      ...(hasRatio ? [{
+        name: '全网正确率', type: 'line', yAxisIndex: 1,
+        data: data.map(d => d.correctRatio ? +d.correctRatio.toFixed(1) : null),
+        smooth: true, symbol: 'circle', symbolSize: 5,
+        lineStyle: { color: C_ACCENT, width: 2 }, itemStyle: { color: C_ACCENT }
+      }] : [])
     ]
   })
 }

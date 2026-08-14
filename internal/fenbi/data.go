@@ -208,13 +208,14 @@ func (c *Client) ExerciseDetail(exerciseID int64) ([]ExerciseItem, error) {
 			idx = i + 1
 		}
 		items = append(items, ExerciseItem{
-			Idx:        idx,
-			QuestionID: d.questionID,
-			Correct:    d.correct,
-			Cost:       d.ua.Time,
-			Status:     d.status,
-			Difficulty: sol.Difficulty,
-			Title:      stripHTMLContent(sol.Content),
+			Idx:          idx,
+			QuestionID:   d.questionID,
+			Correct:      d.correct,
+			Cost:         d.ua.Time,
+			Status:       d.status,
+			Difficulty:   sol.Difficulty,
+			CorrectRatio: sol.QuestionMeta.CorrectRatio,
+			Title:        stripHTMLContent(sol.Content),
 		})
 	}
 	return items, nil
@@ -317,6 +318,9 @@ type Solution struct {
 	Accessories []struct {
 		Options []string `json:"options"`
 	} `json:"accessories"`
+	QuestionMeta struct {
+		CorrectRatio float64 `json:"correctRatio"`
+	} `json:"questionMeta"`
 }
 
 // Solutions 批量获取解析。

@@ -13,13 +13,13 @@
 
         <!-- 题目卡 -->
         <div class="bento-card" style="margin-bottom:20px;">
-          <div v-if="q.material" class="q-material">{{ q.material }}</div>
+          <div v-if="q.material" class="q-material" v-html="q.material"></div>
           <div class="q-content" v-html="q.content"></div>
 
           <div v-if="!answered" style="margin-top:16px;">
             <div v-for="(opt, i) in options" :key="i" class="opt" @click="answer(i)">
               <span class="opt-letter">{{ letter(i) }}.</span>
-              <span>{{ opt }}</span>
+              <span v-html="opt"></span>
             </div>
           </div>
 
@@ -29,7 +29,7 @@
             <div v-for="(opt, i) in options" :key="i" class="opt"
                  :class="{ correct: isRightChoice(i), wrong: !isRightChoice(i) && i === myChoice }">
               <span class="opt-letter">{{ letter(i) }}.</span>
-              <span>{{ opt }}</span>
+              <span v-html="opt"></span>
               <el-icon v-if="isRightChoice(i)" color="#0D9488"><CircleCheckFilled /></el-icon>
             </div>
           </template>
@@ -195,6 +195,8 @@ onMounted(load)
   line-height: 1.7;
   white-space: pre-wrap;
 }
+.q-material :deep(img), .q-content :deep(img), .opt :deep(img) { max-width: 100%; vertical-align: middle; }
+.q-material :deep(p), .opt :deep(p) { margin: 0; }
 .q-content { line-height: 1.8; font-size: 15px; }
 .q-content :deep(p) { margin-bottom: 8px; }
 .opt {
