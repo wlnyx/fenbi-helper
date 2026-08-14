@@ -2,14 +2,105 @@
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
-<title>复盘工作台</title>
+<title>复盘工作台 · 粉笔工作台</title>
 <link rel="stylesheet" href="/static/styles.css">
+<style>
+    .stat-item .stat-num.small { font-size: 18px; }
+    .queue-item {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 14px;
+        border-bottom: 1px dashed var(--border);
+        cursor: pointer;
+        transition: background .15s;
+    }
+    .queue-item:last-child { border-bottom: none; }
+    .queue-item:hover { background: #f8fbff; }
+    .queue-title { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .badge { font-size: 12px; padding: 1px 8px; border-radius: 10px; white-space: nowrap; }
+    .b-cat { background: #f9f0ff; color: #722ed1; }
+    .b-flag { background: #fff1f0; color: var(--danger); }
+    .b-ok { background: #f6ffed; color: var(--success); }
+    .recent-item {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 14px; border-bottom: 1px dashed var(--border);
+        cursor: pointer; font-size: 13px;
+    }
+    .recent-item:last-child { border-bottom: none; }
+    .recent-item:hover { background: #f8fbff; }
+    .recent-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+    .cat-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 13px; }
+    .cat-bar { height: 10px; border-radius: 5px; background: var(--fb-blue-light); overflow: hidden; flex: 1; }
+    .cat-bar-inner { height: 100%; background: var(--fb-blue); border-radius: 5px; }
+    .cat-name { width: 48px; color: var(--text-2); }
+    .cat-num { width: 32px; text-align: right; color: var(--text-3); }
+</style>
 </head>
 <body>
 {{template "nav" .}}
 <main class="content">
     <h1 class="page-title">复盘工作台</h1>
-    <p class="placeholder">G1 骨架完成，六步功能即将上线。</p>
+
+    <div class="stat-row" style="margin-bottom:20px;">
+        <div class="stat-item"><div class="stat-num small">{{.Data.TotalReview}}</div><div class="stat-label">待复习</div></div>
+        <div class="stat-item"><div class="stat-num small">{{.Data.Flagged}}</div><div class="stat-label">重点攻坚</div></div>
+        <div class="stat-item"><div class="stat-num small">{{.Data.Mastered}}</div><div class="stat-label">已掌握</div></div>
+        <div class="stat-item"><div class="stat-num small">{{.Data.Unreviewed}}</div><div class="stat-label">未复盘</div></div>
+    </div>
+
+    <div class="two-col">
+        <div class="card">
+            <div class="card-title">📅 今日复习</div>
+            {{if not .Data.Queue}}
+            <div class="empty-state" style="padding:20px;">暂无待复习题目，去错题本看看吧</div>
+            {{else}}
+            {{range .Data.Queue}}
+            <div class="queue-item" onclick="window.location='/question/{{.QuestionID}}'">
+                <span class="queue-title">{{.Title}}</span>
+                {{if .ErrorCategory}}<span class="badge b-cat">{{.ErrorCategory}}</span>{{end}}
+                {{if eq .ReviewState "flagged"}}<span class="badge b-flag">重点</span>{{end}}
+                {{if gt .ConsecutiveOK 0}}<span class="badge b-ok">连续做对{{.ConsecutiveOK}}次</span>{{end}}
+            </div>
+            {{end}}
+            {{end}}
+        </div>
+
+        <div>
+            <div class="card">
+                <div class="card-title">🧭 错误类型分布</div>
+                {{$total := 0}}
+                {{range $c := .Categories}}{{$total = add $total (index $.Data.CategoryCount $c)}}{{end}}
+                {{if eq $total 0}}
+                <div class="empty-state" style="padding:20px;">还没有归类记录</div>
+                {{else}}
+                {{range $c := .Categories}}
+                {{$n := index $.Data.CategoryCount $c}}
+                <div class="cat-row">
+                    <span class="cat-name">{{$c}}</span>
+                    <div class="cat-bar"><div class="cat-bar-inner" style="width:{{percent $n $total}}%"></div></div>
+                    <span class="cat-num">{{$n}}</span>
+                </div>
+                {{end}}
+                {{end}}
+            </div>
+
+            <div class="card">
+                <div class="card-title">📋 近期练习</div>
+                {{if not .Data.RecentHistory}}
+                <div class="empty-state" style="padding:20px;">暂无练习记录</div>
+                {{else}}
+                {{range .Data.RecentHistory}}
+                <div class="recent-item" onclick="window.location='/exercise/{{.ID}}'">
+                    <span class="recent-name">{{.Name}}</span>
+                    <span style="color:var(--text-3);font-size:12px;">{{.AnswerCount}}题</span>
+                    <span style="color:var(--success);font-size:12px;">{{printf "%.1f" .CorrectRate}}%</span>
+                </div>
+                {{end}}
+                {{end}}
+            </div>
+        </div>
+    </div>
 </main>
 </body>
 </html>

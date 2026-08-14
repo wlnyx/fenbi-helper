@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>小工具 · 粉笔工作台</title>
+<link rel="stylesheet" href="/static/styles.css">
+<style>
+    .timer-card { text-align: center; }
+    .preset-row { display: flex; gap: 8px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap; }
+    .preset {
+        padding: 6px 16px; border-radius: 16px; border: 1px solid var(--border);
+        background: #fff; cursor: pointer; font-size: 13px; color: var(--text-2);
+    }
+    .preset.active { background: var(--fb-blue); color: #fff; border-color: var(--fb-blue); }
+    .timer-display {
+        font-size: 72px; font-weight: 700; color: var(--fb-blue);
+        font-variant-numeric: tabular-nums; margin: 10px 0 20px;
+    }
+    .timer-display.warning { color: var(--danger); }
+    .timer-ctrl { display: flex; gap: 12px; justify-content: center; }
+    .doubt-zone { margin-top: 24px; text-align: left; }
+    .doubt-zone .rp-label { font-size: 13px; font-weight: 600; color: var(--text-2); margin-bottom: 8px; }
+</style>
+</head>
+<body>
+{{template "nav" .}}
+<main class="content">
+    <h1 class="page-title">小工具</h1>
+
+    <div class="card timer-card">
+        <div class="card-title">① 限时做题计时器</div>
+        <div class="preset-row">
+            <button class="preset active" data-min="25" data-q="20">资料分析 20题/25min</button>
+            <button class="preset" data-min="30" data-q="30">言语 30题/30min</button>
+            <button class="preset" data-min="15" data-q="15">数量 15题/15min</button>
+            <button class="preset" data-min="10" data-q="10">自定义 10题/10min</button>
+        </div>
+        <div class="timer-display" id="timerDisplay">25:00</div>
+        <div class="timer-ctrl">
+            <button class="act-btn" id="timerStart">开始计时</button>
+            <button class="act-btn gray" id="timerReset" style="display:none;">重置</button>
+        </div>
+        <div class="doubt-zone">
+            <div class="rp-label">结束后录入存疑题目（可去错题本/收藏复制题目链接，或输入题目ID，逗号分隔）</div>
+            <input class="note4-input" id="doubtIds" placeholder="例如：18643901,16593229">
+            <button class="act-btn" onclick="saveDoubts()">保存存疑标记</button>
+            <span class="save-tip" id="doubtTip"></span>
+        </div>
+    </div>
+</main>
+<script>
+var totalSec = 25 * 60;
+var remaining = totalSec;
+var timer = null;
+
+var PRESETS = {
+    '25': { q: 20 }, '30': { q: 30 }, '15': { q: 15 }, '10': { q: 10 }
+};
+
+function renderTime() {
+    var m = Math.floor(remaining / 60);
+    var s = remaining % 60;
+    document.getElementById('timerDisplay').textContent =
+        String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+}
+
+document.querySelectorAll('.preset').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        document.querySelectorAll('.preset').forEach(function (p) { p.classList.remove('active'); });
+        btn.classList.add('active');
+        totalSec = parseInt(btn.getAttribute('data-min'), 10) * 60;
+        remaining = totalSec;
+        renderTime();
+    });
+});
+
+document.getElementById('timerStart').addEventListener('click', function () {
+    if (timer) {
+        clearInterval(timer);
+        timer = null;
+        this.textContent = '继续计时';
+        return;
+    }
+    var btn = this;
+    document.getElementById('timerReset').style.display = '';
+    btn.textContent = '暂停';
+    timer = setInterval(function () {
+        remaining--;
+        renderTime();
+        var disp = document.getElementById('timerDisplay');
+        if (remaining <= 60) disp.classList.add('warning');
+        if (remaining <= 0) {
+            clearInterval(timer);
+            timer = null;
+            btn.textContent = '开始计时';
+            alert('时间到！请停笔。');
+        }
+    }, 1000);
+});
+
+document.getElementById('timerReset').addEventListener('click', function () {
+    if (timer) { clearInterval(timer); timer = null; }
+    remaining = totalSec;
+    document.getElementById('timerDisplay').classList.remove('warning');
+    document.getElementById('timerStart').textContent = '开始计时';
+    this.style.display = 'none';
+    renderTime();
+});
+
+function saveDoubts() {
+    var ids = document.getElementById('doubtIds').value.split(/[,，\s]+/).filter(Boolean);
+    if (ids.length === 0) { alert('请输入题目ID'); return; }
+    var p = ids.map(function (id) {
+        return fetch('/api/review/update', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ questionId: String(id), field: 'doubt', value: '1' })
+        });
+    });
+    Promise.all(p).then(function () {
+        var tip = document.getElementById('doubtTip');
+        tip.textContent = '已标记 ' + ids.length + ' 道存疑题';
+        setTimeout(function () { tip.textContent = ''; }, 2000);
+    });
+}
+</script>
+</body>
+</html>

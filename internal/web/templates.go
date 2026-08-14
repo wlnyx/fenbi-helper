@@ -11,7 +11,15 @@ import (
 var templateSet *template.Template
 
 func init() {
-	templateSet = template.New("root").Funcs(template.FuncMap{})
+	templateSet = template.New("root").Funcs(template.FuncMap{
+		"add": func(a, b int) int { return a + b },
+		"percent": func(a, b int) int {
+			if b <= 0 {
+				return 0
+			}
+			return a * 100 / b
+		},
+	})
 	fs.WalkDir(assets, "templates", func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err

@@ -70,6 +70,9 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /wrong", s.requireAuth(s.handleWrong))
 	mux.HandleFunc("GET /collects", s.requireAuth(s.handleCollects))
 	mux.HandleFunc("GET /review", s.requireAuth(s.handleReviewQueue))
+	mux.HandleFunc("GET /question/{id}", s.requireAuth(s.handleQuestion))
+	mux.HandleFunc("GET /exercise/{id}", s.requireAuth(s.handleExercise))
+	mux.HandleFunc("GET /tools", s.requireAuth(s.handleTools))
 
 	// 扫码登录 API
 	mux.HandleFunc("POST /api/qr/start", s.handleQRStart)
@@ -126,11 +129,6 @@ func (s *Server) isLoggedIn(r *http.Request) bool {
 
 func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 	tpl := mustTemplate("setup")
-	tpl.Execute(w, map[string]interface{}{})
-}
-
-func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
-	tpl := mustTemplate("dashboard")
 	tpl.Execute(w, map[string]interface{}{})
 }
 

@@ -129,6 +129,10 @@ func (s *Server) handleReviewQueue(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleTools(w http.ResponseWriter, r *http.Request) {
+	renderPage(w, "tools", map[string]interface{}{"Nav": navItems("tools")})
+}
+
 func collectModules(groups []review.Group) []string {
 	seen := map[string]bool{}
 	var out []string
