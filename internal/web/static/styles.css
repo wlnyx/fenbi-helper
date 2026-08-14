@@ -1,0 +1,96 @@
+:root {
+    --fb-blue: #3C7CFC;
+    --success: #52c41a;
+    --warning: #d48806;
+    --danger: #f5222d;
+    --text-1: #1f2329;
+    --text-2: #6b7280;
+    --bg-page: #f5f7fa;
+    --bg-card: #ffffff;
+    --border: #e5e7eb;
+    --radius: 8px;
+    --shadow-card: 0 1px 4px rgba(0, 0, 0, .06);
+    --nav-width: 220px;
+    --spacing-1: 4px; --spacing-2: 8px; --spacing-3: 12px;
+    --spacing-4: 16px; --spacing-5: 24px; --spacing-6: 32px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    background: var(--bg-page);
+    color: var(--text-1);
+}
+
+/* 侧边导航 */
+.sidebar {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    width: var(--nav-width);
+    background: var(--bg-card);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    padding: var(--spacing-4) var(--spacing-3);
+}
+.sidebar-logo {
+    font-size: 16px; font-weight: bold; color: var(--fb-blue);
+    padding: 0 var(--spacing-2) var(--spacing-5);
+}
+.nav-item {
+    display: block;
+    padding: 10px var(--spacing-3);
+    margin-bottom: var(--spacing-1);
+    border-radius: var(--radius);
+    color: var(--text-1);
+    text-decoration: none;
+    font-size: 14px;
+    transition: background .2s;
+}
+.nav-item:hover { background: #eef4ff; color: var(--fb-blue); }
+.sidebar-footer { margin-top: auto; }
+
+.content {
+    margin-left: var(--nav-width);
+    padding: var(--spacing-5) var(--spacing-6);
+    max-width: 1080px;
+}
+.page-title { font-size: 20px; margin-bottom: var(--spacing-5); }
+.placeholder { color: var(--text-2); font-size: 14px; }
+
+/* 登录页 */
+.login-body {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.qr-card {
+    width: 340px;
+    background: var(--bg-card);
+    border-radius: 12px;
+    padding: 32px 28px;
+    text-align: center;
+    box-shadow: var(--shadow-card);
+}
+.qr-title { font-size: 18px; font-weight: bold; margin-bottom: 6px; }
+.qr-subtitle { font-size: 13px; color: #999; margin-bottom: 20px; }
+.qr-img-box {
+    width: 240px; height: 240px;
+    margin: 0 auto 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    display: flex; align-items: center; justify-content: center;
+}
+.qr-img-box img { width: 220px; height: 220px; }
+.qr-msg { font-size: 14px; color: var(--text-2); margin-bottom: 12px; min-height: 20px; }
+.qr-btn {
+    padding: 8px 28px;
+    background: #13c2c2;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    display: none;
+}
