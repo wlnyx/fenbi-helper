@@ -182,6 +182,7 @@ func (s *Server) handleReviewUpdate(w http.ResponseWriter, r *http.Request) {
 		}
 	})
 	s.Store.Save()
+	s.invalidateDataCache(body.QuestionID)
 	writeJSON(w, http.StatusOK, map[string]interface{}{"code": 200})
 }
 
@@ -200,6 +201,7 @@ func (s *Server) handleNote4(w http.ResponseWriter, r *http.Request) {
 		q.Note4 = &n
 	})
 	s.Store.Save()
+	s.invalidateDataCache(body.QuestionID)
 
 	if body.SyncFenbi {
 		qid, err := strconv.ParseInt(body.QuestionID, 10, 64)
@@ -225,5 +227,6 @@ func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 		e.Macro = &body.Summary
 	})
 	s.Store.Save()
+	s.invalidateDataCache("")
 	writeJSON(w, http.StatusOK, map[string]interface{}{"code": 200})
 }

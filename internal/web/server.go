@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/skip2/go-qrcode"
@@ -29,6 +30,8 @@ type Server struct {
 	Store   *store.Store
 	Review  *review.Service
 	DataDir string
+	cache   *memCache
+	questionCache *memCache
 }
 
 func NewServer(dataDir string) (*Server, error) {
@@ -56,23 +59,14 @@ func NewServer(dataDir string) (*Server, error) {
 		Store:   dataStore,
 		Review:  review.NewService(client, dataStore),
 		DataDir: dataDir,
+		cache:   newMemCache(5 * time.Minute),
+		questionCache: newMemCache(time.Hour),
 	}, nil
 }
 
 // Routes 注册全部路由。
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
-
-	// 页面
-	mux.HandleFunc("GET /setup", s.handleSetup)
-	mux.HandleFunc("GET /dashboard", s.requireAuth(s.handleDashboard))
-	mux.HandleFunc("GET /history", s.requireAuth(s.handleHistory))
-	mux.HandleFunc("GET /wrong", s.requireAuth(s.handleWrong))
-	mux.HandleFunc("GET /collects", s.requireAuth(s.handleCollects))
-	mux.HandleFunc("GET /review", s.requireAuth(s.handleReviewQueue))
-	mux.HandleFunc("GET /question/{id}", s.requireAuth(s.handleQuestion))
-	mux.HandleFunc("GET /exercise/{id}", s.requireAuth(s.handleExercise))
-	mux.HandleFunc("GET /tools", s.requireAuth(s.handleTools))
 
 	// 扫码登录 API
 	mux.HandleFunc("POST /api/qr/start", s.handleQRStart)
@@ -86,15 +80,61 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /api/review/note4", s.requireAuth(s.handleNote4))
 	mux.HandleFunc("POST /api/review/summary", s.requireAuth(s.handleSummary))
 
-	// 静态资源
-	mux.HandleFunc("GET /static/", s.handleStatic)
+	// JSON API（Vue SPA）
+	s.apiRoutes(mux)
 
 	// 健康检查
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
 	})
 
+	// SPA 前端（Vue 构建产物，已 embed 进二进制）
+	mux.HandleFunc("GET /assets/", s.handleAsset)
+	mux.HandleFunc("GET /", s.handleSPA)
+
 	return logMiddleware(mux)
+}
+
+// handleSPA 所有非 API 路径返回前端入口（前端路由接管）。
+func (s *Server) handleSPA(w http.ResponseWriter, r *http.Request) {
+	if strings.HasPrefix(r.URL.Path, "/api/") {
+		http.NotFound(w, r)
+		return
+	}
+	index, err := frontend.ReadFile("dist/index.html")
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Write(index)
+}
+
+// handleAsset 前端静态资源。
+func (s *Server) handleAsset(w http.ResponseWriter, r *http.Request) {
+	name := "dist/" + strings.TrimPrefix(r.URL.Path, "/")
+	content, err := frontend.ReadFile(name)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	ct := "text/plain"
+	switch {
+	case strings.HasSuffix(name, ".css"):
+		ct = "text/css"
+	case strings.HasSuffix(name, ".js"):
+		ct = "application/javascript"
+	case strings.HasSuffix(name, ".png"):
+		ct = "image/png"
+	case strings.HasSuffix(name, ".svg"):
+		ct = "image/svg+xml"
+	case strings.HasSuffix(name, ".woff2"):
+		ct = "font/woff2"
+	}
+	w.Header().Set("Content-Type", ct)
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	w.Write(content)
 }
 
 // --- 中间件 ---

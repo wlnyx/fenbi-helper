@@ -4,6 +4,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/wlnyx/fenbi-helper-go/internal/fenbi"
@@ -147,19 +148,47 @@ func (s *Service) buildGroups(leafs []struct {
 	IDs  []int64
 }, excludeArchived bool) ([]Group, error) {
 	reviews := s.Store.AllQuestions()
-	var groups []Group
+
+	// 并发拉取各分组题目
+	type leafResult struct {
+		leaf struct {
+			ID   int64
+			Name string
+			IDs  []int64
+		}
+		byID map[int64]fenbi.Question
+	}
+	results := make(chan leafResult, len(leafs))
+	var wg sync.WaitGroup
 	for _, leaf := range leafs {
 		if len(leaf.IDs) == 0 {
 			continue
 		}
-		qs, err := s.Fenbi.Questions(leaf.IDs)
-		if err != nil {
-			continue
-		}
-		byID := map[int64]fenbi.Question{}
-		for _, q := range qs {
-			byID[q.ID] = q
-		}
+		wg.Add(1)
+		go func(leaf struct {
+			ID   int64
+			Name string
+			IDs  []int64
+		}) {
+			defer wg.Done()
+			qs, err := s.Fenbi.Questions(leaf.IDs)
+			if err != nil {
+				return
+			}
+			byID := map[int64]fenbi.Question{}
+			for _, q := range qs {
+				byID[q.ID] = q
+			}
+			results <- leafResult{leaf: leaf, byID: byID}
+		}(leaf)
+	}
+	wg.Wait()
+	close(results)
+
+	var groups []Group
+	for r := range results {
+		leaf := r.leaf
+		byID := r.byID
 		var items []QuestionItem
 		for _, id := range leaf.IDs {
 			q, ok := byID[id]
@@ -280,4 +309,25 @@ func (s *Service) enrichEntries(ids []int64, reviews map[string]*store.QuestionR
 // Today 今天是第几天用于（暂保留，供后续扩展）。
 func Today() string {
 	return time.Now().Format("2006-01-02")
+}
+
+// UsedCategories 收集已用过的错误归类标签（预设 + 自定义，去重）。
+func (s *Service) UsedCategories() []string {
+	all := s.Store.AllQuestions()
+	seen := map[string]bool{}
+	for _, name := range store.ErrorCategories {
+		seen[name] = true
+	}
+	var out []string
+	for _, name := range store.ErrorCategories {
+		out = append(out, name)
+	}
+	for _, rv := range all {
+		if rv.ErrorCategory == "" || seen[rv.ErrorCategory] {
+			continue
+		}
+		seen[rv.ErrorCategory] = true
+		out = append(out, rv.ErrorCategory)
+	}
+	return out
 }

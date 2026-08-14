@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -119,9 +120,124 @@ type ExerciseHistoryItem struct {
 
 // ExerciseReport 练习报告。
 type ExerciseReport struct {
-	ElapsedTime int `json:"elapsedTime"`
-	AnswerCount int `json:"answerCount"`
+	ElapsedTime  int `json:"elapsedTime"`
+	AnswerCount  int `json:"answerCount"`
 	CorrectCount int `json:"correctCount"`
+	Answers      []struct {
+		QuestionID int64 `json:"questionId"`
+		Correct    bool  `json:"correct"`
+		Status     int   `json:"status"`
+	} `json:"answers"`
+}
+
+// UserAnswer 单题作答。
+type UserAnswer struct {
+	QuestionID    int64 `json:"questionId"`
+	QuestionIndex int   `json:"questionIndex"`
+	Time          int   `json:"time"`
+}
+
+// ExerciseItem 练习详情中的题目级数据。
+type ExerciseItem struct {
+	Idx          int     `json:"idx"`
+	QuestionID   int64   `json:"questionId"`
+	Correct      bool    `json:"correct"`
+	Cost         int     `json:"cost"`
+	Status       int     `json:"status"`
+	Difficulty   int     `json:"difficulty"`
+	CorrectRatio float64 `json:"correctRatio"`
+	Title        string  `json:"title"`
+}
+
+// ExerciseDetail 练习详情：每题对错/耗时 + 难度。
+func (c *Client) ExerciseDetail(exerciseID int64) ([]ExerciseItem, error) {
+	var ex struct {
+		UserAnswers map[string]UserAnswer `json:"userAnswers"`
+	}
+	u := fmt.Sprintf("https://tiku.fenbi.com/api/xingce/exercises/%d?%s", exerciseID, apiParams)
+	if _, err := c.GetJSON(u, &ex); err != nil {
+		return nil, err
+	}
+	rep, err := c.ExerciseReport(exerciseID)
+	if err != nil {
+		return nil, err
+	}
+
+	type doneItem struct {
+		ua         UserAnswer
+		correct    bool
+		status     int
+		questionID int64
+	}
+	var done []doneItem
+	for _, a := range rep.Answers {
+		if a.Status == 10 {
+			continue
+		}
+		ua := UserAnswer{QuestionID: a.QuestionID, QuestionIndex: -1}
+		for _, v := range ex.UserAnswers {
+			if v.QuestionID == a.QuestionID {
+				ua = v
+				break
+			}
+		}
+		done = append(done, doneItem{ua: ua, correct: a.Correct, status: a.Status, questionID: a.QuestionID})
+	}
+	if len(done) == 0 {
+		return nil, nil
+	}
+
+	// 批量补难度/标题
+	ids := make([]int64, 0, len(done))
+	for _, d := range done {
+		ids = append(ids, d.questionID)
+	}
+	sols, err := c.Solutions(ids)
+	if err != nil {
+		return nil, err
+	}
+
+	var items []ExerciseItem
+	for i, d := range done {
+		var sol Solution
+		if i < len(sols) {
+			sol = sols[i]
+		}
+		idx := d.ua.QuestionIndex + 1
+		if idx <= 0 {
+			idx = i + 1
+		}
+		items = append(items, ExerciseItem{
+			Idx:        idx,
+			QuestionID: d.questionID,
+			Correct:    d.correct,
+			Cost:       d.ua.Time,
+			Status:     d.status,
+			Difficulty: sol.Difficulty,
+			Title:      stripHTMLContent(sol.Content),
+		})
+	}
+	return items, nil
+}
+
+func stripHTMLContent(s string) string {
+	var b strings.Builder
+	inTag := false
+	for _, r := range s {
+		switch {
+		case r == '<':
+			inTag = true
+		case r == '>':
+			inTag = false
+		case !inTag:
+			b.WriteRune(r)
+		}
+	}
+	out := strings.Join(strings.Fields(b.String()), " ")
+	if len(out) > 60 {
+		out = out[:60] + "…"
+	}
+	return out
 }
 
 // History 获取练习历史（categoryId=2 行测模块，两个游标合并）。
@@ -138,18 +254,40 @@ func (c *Client) History() ([]ExerciseHistoryItem, error) {
 		all = append(all, resp.Datas...)
 	}
 
-	// 逐条拉报告填充耗时/正确率
+	// 并发拉报告填充耗时/正确率
+	type reportResult struct {
+		id  int64
+		rep *ExerciseReport
+		err error
+	}
 	var out []ExerciseHistoryItem
-	for i := range all {
-		item := all[i]
+	var pending []int64
+	valid := map[int64]ExerciseHistoryItem{}
+	for _, item := range all {
 		if item.Status != 1 {
 			continue
 		}
-		rep, err := c.ExerciseReport(item.ID)
-		if err == nil && rep.AnswerCount > 0 {
-			item.AnswerCount = rep.AnswerCount
-			item.ElapsedTime = rep.ElapsedTime
-			item.CorrectRate = float64(rep.CorrectCount) / float64(rep.AnswerCount) * 100
+		valid[item.ID] = item
+		pending = append(pending, item.ID)
+	}
+	results := make(chan reportResult, len(pending))
+	var wg sync.WaitGroup
+	for _, id := range pending {
+		wg.Add(1)
+		go func(id int64) {
+			defer wg.Done()
+			rep, err := c.ExerciseReport(id)
+			results <- reportResult{id: id, rep: rep, err: err}
+		}(id)
+	}
+	wg.Wait()
+	close(results)
+	for r := range results {
+		item := valid[r.id]
+		if r.err == nil && r.rep != nil && r.rep.AnswerCount > 0 {
+			item.AnswerCount = r.rep.AnswerCount
+			item.ElapsedTime = r.rep.ElapsedTime
+			item.CorrectRate = float64(r.rep.CorrectCount) / float64(r.rep.AnswerCount) * 100
 		}
 		if item.AnswerCount > 0 {
 			out = append(out, item)

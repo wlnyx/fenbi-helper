@@ -1,0 +1,155 @@
+/* Bento 主题：Element Plus 变量覆盖（对齐 design-system/MASTER.md） */
+:root {
+  /* 品牌色 → Element Plus 主色系 */
+  --el-color-primary: #0D9488;
+  --el-color-primary-light-3: #2ea99e;
+  --el-color-primary-light-5: #66c3ba;
+  --el-color-primary-light-7: #a3dcd6;
+  --el-color-primary-light-8: #c2e8e4;
+  --el-color-primary-light-9: #e0f3f1;
+  --el-color-primary-dark-2: #0a766c;
+
+  --el-color-success: #0D9488;
+  --el-color-warning: #EA580C;
+  --el-color-danger: #DC2626;
+  --el-color-error: #DC2626;
+
+  /* 圆角/边框 */
+  --el-border-radius-base: 8px;
+  --el-border-radius-small: 6px;
+  --el-border-color: #E8E8ED;
+  --el-border-color-light: #E8E8ED;
+  --el-border-color-lighter: #F0F0F4;
+
+  /* 文字 */
+  --el-text-color-primary: #1D1D1F;
+  --el-text-color-regular: #3a3a3c;
+  --el-text-color-secondary: #86868B;
+
+  /* 填充/背景 */
+  --el-fill-color: #F5F5F7;
+  --el-fill-color-light: #FAFAFC;
+  --el-fill-color-lighter: #FCFCFD;
+  --el-bg-color: #FFFFFF;
+  --el-bg-color-page: #F5F5F7;
+
+  /* Bento 令牌 */
+  --bento-radius: 20px;
+  --bento-shadow: 0 4px 12px rgba(0, 0, 0, .06);
+  --bento-shadow-hover: 0 8px 24px rgba(0, 0, 0, .10);
+  --page-bg: #F5F5F7;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, "SF Pro Text", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--page-bg);
+  color: var(--el-text-color-primary);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Bento 卡片 */
+.bento-card {
+  background: #fff;
+  border-radius: var(--bento-radius);
+  padding: 20px 24px;
+  box-shadow: var(--bento-shadow);
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+.bento-card.clickable { cursor: pointer; }
+.bento-card.clickable:hover {
+  transform: scale(1.02);
+  box-shadow: var(--bento-shadow-hover);
+}
+.bento-card-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 侧边栏 */
+.sidebar {
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  width: 220px;
+  background: #fff;
+  border-right: 1px solid var(--el-border-color-lighter);
+  display: flex;
+  flex-direction: column;
+  padding: 24px 12px;
+  z-index: 10;
+}
+.sidebar-logo {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 15px; font-weight: 700; color: var(--el-color-primary);
+  padding: 0 10px 24px;
+}
+.sidebar-logo .logo-badge {
+  width: 32px; height: 32px;
+  border-radius: 10px;
+  background: var(--el-color-primary);
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+}
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  margin-bottom: 4px;
+  border-radius: 10px;
+  color: var(--el-text-color-regular);
+  text-decoration: none;
+  font-size: 14px;
+  transition: all 150ms ease;
+  cursor: pointer;
+}
+.nav-item:hover { background: var(--el-color-primary-light-9); color: var(--el-color-primary); }
+.nav-item.active {
+  background: var(--el-color-primary);
+  color: #fff;
+}
+.nav-item .el-icon { font-size: 18px; }
+.sidebar-footer { margin-top: auto; }
+
+/* 内容区 */
+.content {
+  margin-left: 220px;
+  padding: 24px 32px;
+}
+.page-title { font-size: 20px; font-weight: 600; margin-bottom: 20px; }
+
+/* 统计卡 */
+.kpi-num {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--el-color-primary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.kpi-label { font-size: 12px; color: var(--el-text-color-secondary); margin-top: 6px; }
+
+/* 分类胶囊 */
+.cat-tag { border-radius: 999px; }
+
+/* 难度点 */
+.diff-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.diff-dot.easy { background: #0D9488; }
+.diff-dot.mid { background: #B45309; }
+.diff-dot.hard { background: #DC2626; }
+
+/* 空状态 */
+.empty-hint { color: var(--el-text-color-secondary); padding: 40px 0; }
+
+/* 响应式 */
+@media (max-width: 1024px) {
+  .content { padding: 16px 20px; }
+}
+@media (max-width: 768px) {
+  .sidebar { width: 64px; padding: 16px 8px; }
+  .sidebar-logo span, .nav-item span { display: none; }
+  .nav-item { justify-content: center; }
+  .content { margin-left: 64px; padding: 16px; }
+}

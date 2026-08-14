@@ -63,6 +63,21 @@ func (s *Store) LoadCredentials() (*DeviceID, []fenbi.Cookie) {
 	return &dev, cookies
 }
 
+// ClearCredentials 删除本地凭据（退出登录）。
+func (s *Store) ClearCredentials() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	err1 := os.Remove(filepath.Join(s.dir, "device.json"))
+	err2 := os.Remove(filepath.Join(s.dir, "cookies.json"))
+	if err1 != nil && !os.IsNotExist(err1) {
+		return err1
+	}
+	if err2 != nil && !os.IsNotExist(err2) {
+		return err2
+	}
+	return nil
+}
+
 // HasSession 是否已有持久化登录凭据。
 func (s *Store) HasSession() bool {
 	dev, _ := s.LoadCredentials()
