@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>{{.Title}} · 粉笔工作台</title>
+<link rel="stylesheet" href="/static/styles.css">
+<style>
+    .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+    .group {
+        background: var(--bg-card);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-card);
+        margin-bottom: 20px;
+        overflow: hidden;
+    }
+    .group-title {
+        padding: 14px 20px;
+        font-size: 15px; font-weight: 600;
+        border-bottom: 2px solid var(--fb-blue-light);
+        display: flex; align-items: center; gap: 8px;
+    }
+    .group-title .count { font-size: 12px; color: var(--text-3); font-weight: normal; }
+    .q-item {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 20px;
+        border-bottom: 1px dashed var(--border);
+        cursor: pointer;
+        transition: background .15s;
+    }
+    .q-item:last-child { border-bottom: none; }
+    .q-item:hover { background: #f8fbff; }
+    .q-title { flex: 1; font-size: 13px; color: var(--text-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .badge {
+        font-size: 12px; padding: 1px 8px; border-radius: 10px;
+        white-space: nowrap;
+    }
+    .b-type { background: var(--fb-blue-light); color: var(--fb-blue); }
+    .b-diff-easy { background: #f6ffed; color: var(--success); }
+    .b-diff-mid { background: #fffbe6; color: var(--warning); }
+    .b-diff-hard { background: #fff1f0; color: var(--danger); }
+    .b-cat { background: #f9f0ff; color: #722ed1; }
+    .b-unreviewed { background: #fff7e6; color: #d46b08; }
+    .b-mastered { background: #f6ffed; color: var(--success); }
+    .b-flagged { background: #fff1f0; color: var(--danger); }
+    .q-diff {
+        width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+    }
+    .q-diff.easy { background: var(--success); }
+    .q-diff.mid { background: var(--warning); }
+    .q-diff.hard { background: var(--danger); }
+    .cat-picker {
+        display: none; gap: 6px; padding: 8px 20px; background: #fafcff;
+        border-bottom: 1px dashed var(--border);
+    }
+    .cat-picker.show { display: flex; flex-wrap: wrap; }
+    .cat-btn {
+        font-size: 12px; padding: 2px 10px; border-radius: 12px;
+        border: 1px solid var(--border); background: #fff; cursor: pointer;
+        color: var(--text-2); transition: all .15s;
+    }
+    .cat-btn:hover { border-color: var(--fb-blue); color: var(--fb-blue); }
+    .cat-btn.active { background: #722ed1; color: #fff; border-color: #722ed1; }
+    .diff-badge { font-size: 12px; color: var(--text-3); white-space: nowrap; }
+</style>
+</head>
+<body>
+{{template "nav" .}}
+<main class="content">
+    <h1 class="page-title">{{.Title}}</h1>
+
+    <div class="card">
+        <div class="tabs">
+            <div class="tab-row">
+                {{range .Modules}}
+                <a class="tab {{if eq $.Current .}}active{{end}}" href="?module={{.}}&range={{$.Range}}">{{.}}</a>
+                {{end}}
+            </div>
+            <div class="tab-row">
+                <a class="tab {{if eq $.Range ""}}active{{end}}" href="?module={{$.Current}}&range=">近90天</a>
+                <a class="tab {{if eq $.Range "30"}}active{{end}}" href="?module={{$.Current}}&range=30">近30天</a>
+                <a class="tab {{if eq $.Range "180"}}active{{end}}" href="?module={{$.Current}}&range=180">近180天</a>
+                <a class="tab {{if eq $.Range "all"}}active{{end}}" href="?module={{$.Current}}&range=all">全部</a>
+            </div>
+        </div>
+    </div>
+
+    {{if not .Groups}}
+    <div class="empty-state">暂无数据</div>
+    {{else}}
+    {{range .Groups}}
+    <div class="group">
+        <div class="group-title">{{.Name}}<span class="count">共 {{.Count}} 题</span></div>
+        {{range .Items}}
+        <div class="q-item" data-qid="{{.ID}}" onclick="window.location='/question/{{.ID}}'">
+            <span class="q-diff {{if le .Difficulty 4}}easy{{else if ge .Difficulty 7}}hard{{else}}mid{{end}}"></span>
+            <span class="q-title">{{.Title}}</span>
+            {{if .ErrorCategory}}<span class="badge b-cat">{{.ErrorCategory}}</span>{{end}}
+            {{if and .HasNote4 (not .ErrorCategory)}}<span class="badge b-unreviewed">未归类</span>{{end}}
+            {{if and (not .HasNote4) (not .ErrorCategory)}}<span class="badge b-unreviewed">未复盘</span>{{end}}
+            {{if eq .ReviewState "mastered"}}<span class="badge b-mastered">已掌握</span>{{end}}
+            {{if eq .ReviewState "flagged"}}<span class="badge b-flagged">重点</span>{{end}}
+            <span class="diff-badge">难度{{.Difficulty}}</span>
+            <span class="badge b-type">{{.Type}}</span>
+        </div>
+        <div class="cat-picker" data-qid="{{.ID}}">
+            <span style="font-size:12px;color:var(--text-3);align-self:center;">归类：</span>
+            {{range $c := $.Categories}}
+            <button class="cat-btn" data-cat="{{$c}}">{{$c}}</button>
+            {{end}}
+        </div>
+        {{end}}
+    </div>
+    {{end}}
+    {{end}}
+</main>
+<script>
+var CATEGORIES = {{.CategoriesJSON}};
+document.querySelectorAll('.q-item').forEach(function (item) {
+    var picker = document.querySelector('.cat-picker[data-qid="' + item.getAttribute('data-qid') + '"]');
+    if (!picker) return;
+    item.addEventListener('click', function (e) {
+        e.stopPropagation();
+        document.querySelectorAll('.cat-picker.show').forEach(function (p) { if (p !== picker) p.classList.remove('show'); });
+        picker.classList.toggle('show');
+    });
+    picker.addEventListener('click', function (e) {
+        var btn = e.target.closest('.cat-btn');
+        if (!btn) return;
+        e.stopPropagation();
+        var qid = picker.getAttribute('data-qid');
+        var cat = btn.getAttribute('data-cat');
+        fetch('/api/review/update', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ questionId: qid, field: 'categorize', value: cat })
+        }).then(function (r) { return r.json(); }).then(function (res) {
+            if (res.code === 200) location.reload();
+        });
+    });
+});
+</script>
+</body>
+</html>

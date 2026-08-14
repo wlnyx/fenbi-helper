@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>复习队列 · 粉笔工作台</title>
+<link rel="stylesheet" href="/static/styles.css">
+<style>
+    .section-title { font-size: 15px; font-weight: 600; margin: 20px 0 12px; display: flex; align-items: center; gap: 8px; }
+    .section-title .badge { font-size: 12px; padding: 1px 10px; border-radius: 10px; }
+    .q-item {
+        display: flex; align-items: center; gap: 10px;
+        padding: 12px 16px;
+        background: var(--bg-card);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-card);
+        margin-bottom: 10px;
+        cursor: pointer;
+        transition: all .15s;
+    }
+    .q-item:hover { box-shadow: var(--shadow-lift); }
+    .q-title { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .badge { font-size: 12px; padding: 1px 8px; border-radius: 10px; white-space: nowrap; }
+    .b-cat { background: #f9f0ff; color: #722ed1; }
+    .b-ok { background: #f6ffed; color: var(--success); }
+    .b-flag { background: #fff1f0; color: var(--danger); }
+    .act-btn {
+        font-size: 12px; padding: 3px 12px; border-radius: 12px;
+        border: 1px solid var(--fb-blue); color: var(--fb-blue);
+        background: #fff; cursor: pointer; white-space: nowrap;
+        transition: all .15s;
+    }
+    .act-btn:hover { background: var(--fb-blue); color: #fff; }
+    .act-btn.green { border-color: var(--success); color: var(--success); }
+    .act-btn.green:hover { background: var(--success); color: #fff; }
+    .act-btn.gray { border-color: var(--text-3); color: var(--text-3); }
+    .act-btn.gray:hover { background: var(--text-3); color: #fff; }
+</style>
+</head>
+<body>
+{{template "nav" .}}
+<main class="content">
+    <h1 class="page-title">复习队列</h1>
+    <p style="color:var(--text-3);font-size:13px;margin-bottom:16px;">手动标记复习状态：点「重做做对」打卡，连续 3 次做对可标记已掌握；重点题置顶。</p>
+
+    {{if and (not .Flagged) (not .Pending) (not .Mastered)}}
+    <div class="empty-state">暂无复习任务，先去错题本给题目归类吧</div>
+    {{end}}
+
+    {{if .Flagged}}
+    <div class="section-title">⭐ 重点攻坚 <span class="badge b-flag">{{len .Flagged}}</span></div>
+    {{range .Flagged}}
+    {{template "review-item" .}}
+    {{end}}
+    {{end}}
+
+    {{if .Pending}}
+    <div class="section-title">📋 待复习 <span class="badge b-cat">{{len .Pending}}</span></div>
+    {{range .Pending}}
+    {{template "review-item" .}}
+    {{end}}
+    {{end}}
+
+    {{if .Mastered}}
+    <div class="section-title">✅ 已掌握 <span class="badge b-ok">{{len .Mastered}}</span></div>
+    {{range .Mastered}}
+    {{template "review-item" .}}
+    {{end}}
+    {{end}}
+</main>
+{{define "review-item"}}
+<div class="q-item" onclick="window.location='/question/{{.QuestionID}}'">
+    <span class="q-title">{{.Title}}</span>
+    {{if .ErrorCategory}}<span class="badge b-cat">{{.ErrorCategory}}</span>{{end}}
+    {{if gt .ConsecutiveOK 0}}<span class="badge b-ok">连续做对{{.ConsecutiveOK}}次</span>{{end}}
+    <button class="act-btn green" data-act="redo" data-qid="{{.QuestionID}}">重做做对</button>
+    <button class="act-btn" data-act="redo-wrong" data-qid="{{.QuestionID}}">重做做错</button>
+    <button class="act-btn" data-act="master" data-qid="{{.QuestionID}}">标记已掌握</button>
+    <button class="act-btn gray" data-act="archive" data-qid="{{.QuestionID}}">归档</button>
+</div>
+{{end}}
+<script>
+document.querySelectorAll('.act-btn').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var act = btn.getAttribute('data-act');
+        var qid = btn.getAttribute('data-qid');
+        var body = { questionId: qid, field: 'redo', value: 'correct' };
+        if (act === 'redo-wrong') body.value = 'wrong';
+        if (act === 'master') body = { questionId: qid, field: 'state', value: 'mastered' };
+        if (act === 'archive') body = { questionId: qid, field: 'archive', value: '1' };
+        fetch('/api/review/update', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(body)
+        }).then(function (r) { return r.json(); }).then(function (res) {
+            if (res.code === 200) location.reload();
+        });
+    });
+});
+</script>
+</body>
+</html>

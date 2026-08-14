@@ -14,6 +14,8 @@ import (
 
 	"github.com/wlnyx/fenbi-helper-go/internal/auth"
 	"github.com/wlnyx/fenbi-helper-go/internal/fenbi"
+	"github.com/wlnyx/fenbi-helper-go/internal/review"
+	"github.com/wlnyx/fenbi-helper-go/internal/store"
 )
 
 //go:embed templates/* static/*
@@ -24,6 +26,8 @@ type Server struct {
 	Auth    *auth.Store
 	Fenbi   *fenbi.Client
 	QR      *fenbi.QRLogin
+	Store   *store.Store
+	Review  *review.Service
 	DataDir string
 }
 
@@ -39,12 +43,18 @@ func NewServer(dataDir string) (*Server, error) {
 	dev, cookies := authStore.LoadCredentials()
 	if dev != nil && dev.DeviceID != "" {
 		client.SetDeviceID(dev.DeviceID)
+		client.LoadSession(cookies)
 	}
-	_ = cookies
+	dataStore := store.NewStore(dataDir)
+	if dev != nil && dev.UserID != 0 {
+		dataStore.SetUser(dev.UserID)
+	}
 	return &Server{
 		Auth:    authStore,
 		Fenbi:   client,
 		QR:      fenbi.NewQRLogin(client),
+		Store:   dataStore,
+		Review:  review.NewService(client, dataStore),
 		DataDir: dataDir,
 	}, nil
 }
@@ -56,6 +66,10 @@ func (s *Server) Routes() http.Handler {
 	// 页面
 	mux.HandleFunc("GET /setup", s.handleSetup)
 	mux.HandleFunc("GET /dashboard", s.requireAuth(s.handleDashboard))
+	mux.HandleFunc("GET /history", s.requireAuth(s.handleHistory))
+	mux.HandleFunc("GET /wrong", s.requireAuth(s.handleWrong))
+	mux.HandleFunc("GET /collects", s.requireAuth(s.handleCollects))
+	mux.HandleFunc("GET /review", s.requireAuth(s.handleReviewQueue))
 
 	// 扫码登录 API
 	mux.HandleFunc("POST /api/qr/start", s.handleQRStart)
@@ -63,6 +77,11 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /api/qr/finish", s.handleQRFinish)
 	mux.HandleFunc("GET /api/qr.png", s.handleQRPNG)
 	mux.HandleFunc("POST /api/session/apply", s.handleSessionApply)
+
+	// 复盘 API
+	mux.HandleFunc("POST /api/review/update", s.requireAuth(s.handleReviewUpdate))
+	mux.HandleFunc("POST /api/review/note4", s.requireAuth(s.handleNote4))
+	mux.HandleFunc("POST /api/review/summary", s.requireAuth(s.handleSummary))
 
 	// 静态资源
 	mux.HandleFunc("GET /static/", s.handleStatic)
@@ -155,6 +174,8 @@ func (s *Server) handleQRFinish(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]interface{}{"code": 500, "msg": "凭据保存失败: " + err.Error()})
 		return
 	}
+	s.Fenbi.LoadSession(cookies)
+	s.Store.SetUser(userID)
 	writeJSON(w, http.StatusOK, map[string]interface{}{"code": 200, "userId": userID})
 }
 
@@ -207,6 +228,49 @@ func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 }
 
 // --- 工具 ---
+
+// NavItem 导航项。
+type NavItem struct {
+	Label  string
+	Href   string
+	Active bool
+}
+
+func navItems(active string) []NavItem {
+	items := []struct {
+		key, label, href string
+	}{
+		{"dashboard", "🎯 复盘工作台", "/dashboard"},
+		{"history", "📋 练习历史", "/history"},
+		{"wrong", "❌ 错题本", "/wrong"},
+		{"collects", "⭐ 我的收藏", "/collects"},
+		{"review", "📅 复习队列", "/review"},
+		{"tools", "🧮 小工具", "/tools"},
+	}
+	var out []NavItem
+	for _, it := range items {
+		out = append(out, NavItem{Label: it.label, Href: it.href, Active: it.key == active})
+	}
+	return out
+}
+
+func renderPage(w http.ResponseWriter, name string, data map[string]interface{}) {
+	t := mustTemplate(name)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	if err := t.Execute(w, data); err != nil {
+		log.Printf("模板渲染 %s 失败: %v", name, err)
+	}
+}
+
+// mustJSON 把值序列化为 JSON 字符串（用于模板内嵌）。
+func mustJSON(v interface{}) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return "[]"
+	}
+	return string(b)
+}
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")

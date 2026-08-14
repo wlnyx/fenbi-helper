@@ -2,18 +2,24 @@
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
-<title>粉笔刷题助手</title>
+<title>粉笔刷题助手 · 登录</title>
 <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body class="login-body">
 <div class="qr-card">
+    <div class="qr-logo">📚</div>
     <div class="qr-title">粉笔刷题助手</div>
-    <div class="qr-subtitle">请用粉笔App扫码登录</div>
-    <div class="qr-img-box">
-        <img id="qrImg" src="" alt="二维码加载中...">
+    <div class="qr-subtitle">扫码登录 · 六步复盘工作台</div>
+    <div class="qr-img-box" id="qrBox">
+        <div class="qr-loading" id="qrLoading">
+            <div class="qr-spinner"></div>
+            <span>正在获取二维码...</span>
+        </div>
+        <img id="qrImg" src="" alt="二维码" style="display:none;">
     </div>
-    <div class="qr-msg" id="qrMsg">正在获取二维码...</div>
+    <div class="qr-msg" id="qrMsg">正在连接粉笔...</div>
     <button id="qrRetry" type="button" class="qr-btn">二维码已失效，点击重新生成</button>
+    <div class="qr-tip">打开粉笔 App → 右上角「扫一扫」</div>
 </div>
 <script>
 var qrPollTimer = null;
@@ -22,26 +28,39 @@ function stopQrPoll() {
     if (qrPollTimer) { clearInterval(qrPollTimer); qrPollTimer = null; }
 }
 
+function showQr(src) {
+    document.getElementById("qrLoading").style.display = 'none';
+    var img = document.getElementById("qrImg");
+    img.src = src;
+    img.style.display = 'block';
+    document.getElementById("qrBox").classList.add('has-qr');
+}
+
 function startQrLogin() {
     var msg = document.getElementById("qrMsg");
     var retry = document.getElementById("qrRetry");
-    document.getElementById("qrImg").src = '';
-    msg.textContent = '正在获取二维码...';
+    var img = document.getElementById("qrImg");
+    img.style.display = 'none';
+    document.getElementById("qrLoading").style.display = '';
+    document.getElementById("qrBox").classList.remove('has-qr');
+    msg.textContent = '正在连接粉笔...';
     retry.style.display = 'none';
     fetch('/api/qr/start', { method: 'POST', headers: { 'content-type': 'application/json' } })
         .then(function (r) { return r.json(); })
         .then(function (result) {
             if (result.code !== 200) {
                 msg.textContent = '获取二维码失败：' + (result.msg || '');
+                document.getElementById("qrLoading").style.display = 'none';
                 retry.style.display = 'inline-block';
                 return;
             }
-            document.getElementById("qrImg").src = '/api/qr.png?t=' + Date.now();
+            showQr('/api/qr.png?t=' + Date.now());
             msg.textContent = '请用粉笔App扫描二维码';
             pollQrStatus();
         })
         .catch(function () {
             msg.textContent = '请求失败，请重试';
+            document.getElementById("qrLoading").style.display = 'none';
             retry.style.display = 'inline-block';
         });
 }
@@ -79,6 +98,7 @@ function pollQrStatus() {
             } else {
                 stopQrPoll();
                 msg.textContent = s.msg || '状态获取失败';
+                document.getElementById("qrLoading").style.display = 'none';
                 retry.style.display = 'inline-block';
             }
         });

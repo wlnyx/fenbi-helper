@@ -13,16 +13,27 @@ const (
 	apiParams = "app=web&kav=131&av=130&hav=128&version=3.0.0.0"
 )
 
-// Client 是粉笔 API 统一客户端：自动注入 deviceId 参数。
+// Client 是粉笔 API 统一客户端：自动注入 deviceId 参数 + 转发会话 Cookie。
 type Client struct {
 	HTTP     *http.Client
 	deviceID string
+	session  []Cookie
 }
 
 func NewClient() *Client {
 	return &Client{
 		HTTP: &http.Client{},
 	}
+}
+
+// LoadSession 载入持久化会话 Cookie（全域转发，与 Node 版一致）。
+func (c *Client) LoadSession(cookies []Cookie) {
+	c.session = cookies
+}
+
+// Session 返回当前会话 Cookie。
+func (c *Client) Session() []Cookie {
+	return c.session
 }
 
 func (c *Client) setDeviceID(deviceID string) {
@@ -51,13 +62,30 @@ func (c *Client) attachDeviceID(rawURL string) string {
 	return rawURL + sep + "deviceId=" + url.QueryEscape(c.deviceID)
 }
 
+// applyHeaders 设置 UA + 会话 Cookie 头（仅粉笔域）。
+func (c *Client) applyHeaders(req *http.Request) {
+	req.Header.Set("User-Agent", UserAgent)
+	if len(c.session) > 0 && strings.Contains(req.URL.Host, "fenbi.com") {
+		parts := make([]string, 0, len(c.session))
+		for _, ck := range c.session {
+			if ck.Name == "" {
+				continue
+			}
+			parts = append(parts, ck.Name+"="+ck.Value)
+		}
+		if len(parts) > 0 {
+			req.Header.Set("Cookie", strings.Join(parts, "; "))
+		}
+	}
+}
+
 // GetJSON 发起 GET 并把响应解析到 out。
 func (c *Client) GetJSON(rawURL string, out interface{}) (int, error) {
 	req, err := http.NewRequest(http.MethodGet, c.attachDeviceID(rawURL), nil)
 	if err != nil {
 		return 0, err
 	}
-	req.Header.Set("User-Agent", UserAgent)
+	c.applyHeaders(req)
 	return c.doJSON(req, out)
 }
 
@@ -67,7 +95,7 @@ func (c *Client) PostJSON(rawURL, jsonBody string, out interface{}) (int, error)
 	if err != nil {
 		return 0, err
 	}
-	req.Header.Set("User-Agent", UserAgent)
+	c.applyHeaders(req)
 	req.Header.Set("Content-Type", "application/json")
 	return c.doJSON(req, out)
 }
@@ -78,7 +106,7 @@ func (c *Client) PostForm(rawURL string, form url.Values, out interface{}) (int,
 	if err != nil {
 		return 0, err
 	}
-	req.Header.Set("User-Agent", UserAgent)
+	c.applyHeaders(req)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded;charset=UTF-8")
 	return c.doJSON(req, out)
 }
