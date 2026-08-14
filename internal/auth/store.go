@@ -104,7 +104,7 @@ func (s *Store) LoadQrPNG() ([]byte, error) {
 // atomicWrite 原子写入：tmp + rename。
 func atomicWrite(path string, data []byte) error {
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
 		return err
 	}
 	return os.Rename(tmp, path)

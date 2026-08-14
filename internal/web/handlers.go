@@ -51,100 +51,6 @@ func filterGroups(groups []review.Group, module, sub string) []review.Group {
 	return out
 }
 
-func (s *Server) handleWrong(w http.ResponseWriter, r *http.Request) {
-	groups, err := s.Review.WrongBookData(parseTimeRange(r), true)
-	if err != nil {
-		http.Error(w, "错题数据加载失败: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	groups = filterGroups(groups, r.URL.Query().Get("module"), r.URL.Query().Get("sub"))
-	modules := collectModules(groups)
-	renderPage(w, "wrong", map[string]interface{}{
-		"Title":         "错题本",
-		"Groups":        groups,
-		"Modules":       modules,
-		"Current":       r.URL.Query().Get("module"),
-		"Sub":           r.URL.Query().Get("sub"),
-		"Range":         r.URL.Query().Get("range"),
-		"Nav":           navItems("wrong"),
-		"Categories":    store.ErrorCategories,
-		"CategoriesJSON": mustJSON(store.ErrorCategories),
-	})
-}
-
-func (s *Server) handleCollects(w http.ResponseWriter, r *http.Request) {
-	groups, err := s.Review.CollectData(parseTimeRange(r), true)
-	if err != nil {
-		http.Error(w, "收藏数据加载失败: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	groups = filterGroups(groups, r.URL.Query().Get("module"), r.URL.Query().Get("sub"))
-	renderPage(w, "wrong", map[string]interface{}{
-		"Title":         "我的收藏",
-		"Groups":        groups,
-		"Modules":       collectModules(groups),
-		"Current":       r.URL.Query().Get("module"),
-		"Sub":           r.URL.Query().Get("sub"),
-		"Range":         r.URL.Query().Get("range"),
-		"Nav":           navItems("collects"),
-		"Categories":    store.ErrorCategories,
-		"CategoriesJSON": mustJSON(store.ErrorCategories),
-	})
-}
-
-func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
-	history, err := s.Fenbi.History()
-	if err != nil {
-		http.Error(w, "历史数据加载失败: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	renderPage(w, "history", map[string]interface{}{
-		"History": history,
-		"Nav":     navItems("history"),
-	})
-}
-
-func (s *Server) handleReviewQueue(w http.ResponseWriter, r *http.Request) {
-	entries, err := s.Review.ReviewQueue()
-	if err != nil {
-		http.Error(w, "复习队列加载失败: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	var pending, flagged, mastered []review.ReviewEntry
-	for _, e := range entries {
-		switch e.ReviewState {
-		case store.StateFlagged:
-			flagged = append(flagged, e)
-		case store.StateMastered:
-			mastered = append(mastered, e)
-		default:
-			pending = append(pending, e)
-		}
-	}
-	renderPage(w, "review", map[string]interface{}{
-		"Pending":  pending,
-		"Flagged":  flagged,
-		"Mastered": mastered,
-		"Nav":      navItems("review"),
-	})
-}
-
-func (s *Server) handleTools(w http.ResponseWriter, r *http.Request) {
-	renderPage(w, "tools", map[string]interface{}{"Nav": navItems("tools")})
-}
-
-func collectModules(groups []review.Group) []string {
-	seen := map[string]bool{}
-	var out []string
-	for _, g := range groups {
-		if !seen[g.Module] {
-			seen[g.Module] = true
-			out = append(out, g.Module)
-		}
-	}
-	return out
-}
-
 // --- 复盘更新 API ---
 
 func (s *Server) handleReviewUpdate(w http.ResponseWriter, r *http.Request) {
@@ -188,9 +94,9 @@ func (s *Server) handleReviewUpdate(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleNote4(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		QuestionID string       `json:"questionId"`
-		Note4      store.Note4  `json:"note4"`
-		SyncFenbi  bool         `json:"syncFenbi"`
+		QuestionID string      `json:"questionId"`
+		Note4      store.Note4 `json:"note4"`
+		SyncFenbi  bool        `json:"syncFenbi"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"code": 400, "msg": err.Error()})
@@ -216,7 +122,7 @@ func (s *Server) handleNote4(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		ExerciseID string            `json:"exerciseId"`
+		ExerciseID string             `json:"exerciseId"`
 		Summary    store.MacroSummary `json:"summary"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {

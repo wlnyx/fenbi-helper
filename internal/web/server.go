@@ -1,11 +1,7 @@
 package web
 
 import (
-	"embed"
 	"encoding/json"
-	"fmt"
-	"html/template"
-	"io/fs"
 	"log"
 	"net/http"
 	"strings"
@@ -19,27 +15,19 @@ import (
 	"github.com/wlnyx/fenbi-helper-go/internal/store"
 )
 
-//go:embed templates/* static/*
-var assets embed.FS
-
 // Server 聚合依赖。
 type Server struct {
-	Auth    *auth.Store
-	Fenbi   *fenbi.Client
-	QR      *fenbi.QRLogin
-	Store   *store.Store
-	Review  *review.Service
-	DataDir string
-	cache   *memCache
+	Auth          *auth.Store
+	Fenbi         *fenbi.Client
+	QR            *fenbi.QRLogin
+	Store         *store.Store
+	Review        *review.Service
+	DataDir       string
+	cache         *memCache
 	questionCache *memCache
 }
 
 func NewServer(dataDir string) (*Server, error) {
-	if err := fs.WalkDir(assets, ".", func(path string, d fs.DirEntry, err error) error {
-		return nil
-	}); err != nil {
-		return nil, err
-	}
 	client := fenbi.NewClient()
 	// 恢复持久化凭据
 	authStore := auth.NewStore(dataDir)
@@ -53,13 +41,13 @@ func NewServer(dataDir string) (*Server, error) {
 		dataStore.SetUser(dev.UserID)
 	}
 	return &Server{
-		Auth:    authStore,
-		Fenbi:   client,
-		QR:      fenbi.NewQRLogin(client),
-		Store:   dataStore,
-		Review:  review.NewService(client, dataStore),
-		DataDir: dataDir,
-		cache:   newMemCache(5 * time.Minute),
+		Auth:          authStore,
+		Fenbi:         client,
+		QR:            fenbi.NewQRLogin(client),
+		Store:         dataStore,
+		Review:        review.NewService(client, dataStore),
+		DataDir:       dataDir,
+		cache:         newMemCache(5 * time.Minute),
 		questionCache: newMemCache(time.Hour),
 	}, nil
 }
@@ -150,6 +138,11 @@ func logMiddleware(next http.Handler) http.Handler {
 func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !s.isLoggedIn(r) {
+			// API 返回 401 JSON；页面重定向到登录页
+			if strings.HasPrefix(r.URL.Path, "/api/") {
+				writeJSON(w, http.StatusUnauthorized, map[string]interface{}{"code": 401, "msg": "未登录"})
+				return
+			}
 			http.Redirect(w, r, "/setup", http.StatusFound)
 			return
 		}
@@ -157,19 +150,14 @@ func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// isLoggedIn 双重校验：客户端 cookie 标记 + 服务端持久化凭据必须同时存在。
+// 仅伪造 Cookie: fb_device=1 无法通过（服务端 device.json 不存在时拒绝）。
 func (s *Server) isLoggedIn(r *http.Request) bool {
 	c, err := r.Cookie("fb_device")
 	if err != nil || c.Value != "1" {
 		return false
 	}
-	return true
-}
-
-// --- 页面 ---
-
-func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
-	tpl := mustTemplate("setup")
-	tpl.Execute(w, map[string]interface{}{})
+	return s.Auth.HasSession()
 }
 
 // --- 扫码登录 API ---
@@ -186,7 +174,8 @@ func (s *Server) handleQRStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.Auth.SaveQrPNG(png); err != nil {
-		log.Printf("保存二维码失败: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"code": 500, "msg": "二维码保存失败"})
+		return
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"code": 200})
 }
@@ -242,66 +231,9 @@ func (s *Server) handleSessionApply(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{"code": 200, "redirectPath": "/dashboard"})
 }
 
-// --- 静态资源 ---
-
-func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
-	name := r.URL.Path
-	content, err := assets.ReadFile("static" + name)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	ct := "text/plain"
-	switch {
-	case hasSuffix(name, ".css"):
-		ct = "text/css"
-	case hasSuffix(name, ".js"):
-		ct = "application/javascript"
-	case hasSuffix(name, ".png"):
-		ct = "image/png"
-	}
-	w.Header().Set("Content-Type", ct)
-	w.Header().Set("Cache-Control", "no-store")
-	w.Write(content)
-}
-
 // --- 工具 ---
 
-// NavItem 导航项。
-type NavItem struct {
-	Label  string
-	Href   string
-	Active bool
-}
-
-func navItems(active string) []NavItem {
-	items := []struct {
-		key, label, href string
-	}{
-		{"dashboard", "🎯 复盘工作台", "/dashboard"},
-		{"history", "📋 练习历史", "/history"},
-		{"wrong", "❌ 错题本", "/wrong"},
-		{"collects", "⭐ 我的收藏", "/collects"},
-		{"review", "📅 复习队列", "/review"},
-		{"tools", "🧮 小工具", "/tools"},
-	}
-	var out []NavItem
-	for _, it := range items {
-		out = append(out, NavItem{Label: it.label, Href: it.href, Active: it.key == active})
-	}
-	return out
-}
-
-func renderPage(w http.ResponseWriter, name string, data map[string]interface{}) {
-	t := mustTemplate(name)
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	if err := t.Execute(w, data); err != nil {
-		log.Printf("模板渲染 %s 失败: %v", name, err)
-	}
-}
-
-// mustJSON 把值序列化为 JSON 字符串（用于模板内嵌）。
+// mustJSON 把值序列化为 JSON 字符串。
 func mustJSON(v interface{}) string {
 	b, err := json.Marshal(v)
 	if err != nil {
@@ -318,12 +250,4 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 
 func hasSuffix(s, suffix string) bool {
 	return len(s) >= len(suffix) && s[len(s)-len(suffix):] == suffix
-}
-
-func mustTemplate(name string) *template.Template {
-	t, err := templateNew(name)
-	if err != nil {
-		panic(fmt.Sprintf("template %s: %v", name, err))
-	}
-	return t
 }

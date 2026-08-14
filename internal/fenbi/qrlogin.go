@@ -2,12 +2,9 @@ package fenbi
 
 import (
 	"crypto/rand"
-	"crypto/rsa"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/big"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -15,9 +12,6 @@ import (
 	"sync"
 	"time"
 )
-
-// 粉笔前端公钥（复刻 encrypt.js）
-const publicKeyB64 = "ANKi9PWuvDOsagwIVvrPx77mXNV0APmjySsYjB1/GtUTY6cyKNRl2RCTt608m9nYk5VeCG2EAZRQmQNQTyfZkw0Uo+MytAkjj17BXOpY4o6+BToi7rRKfTGl6J60/XBZcGSzN1XVZ80ElSjaGE8Ocg8wbPN18tbmsy761zN5SuIl"
 
 const (
 	genCodeURL  = "https://ke.fenbi.com/qrcode-login/api/gen_code"
@@ -216,23 +210,6 @@ func (q *QRLogin) reset() {
 	q.lgtoken = ""
 	q.qrText = ""
 	q.jar = NewSessionJar()
-}
-
-// EncryptVerificationInfo 复刻粉笔 encrypt.js：
-// info = base64(RSA-PKCS1v15(phone:timestamp))
-func EncryptVerificationInfo(phone string) (string, error) {
-	keyBytes, err := base64.StdEncoding.DecodeString(publicKeyB64)
-	if err != nil {
-		return "", err
-	}
-	n := new(big.Int).SetBytes(keyBytes)
-	pub := &rsa.PublicKey{N: n, E: 65537}
-	msg := []byte(phone + ":" + strconv.FormatInt(time.Now().UnixMilli(), 10))
-	cipher, err := rsa.EncryptPKCS1v15(rand.Reader, pub, msg)
-	if err != nil {
-		return "", err
-	}
-	return base64.StdEncoding.EncodeToString(cipher), nil
 }
 
 func randomHex(n int) string {

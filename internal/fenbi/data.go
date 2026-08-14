@@ -88,22 +88,6 @@ func (c *Client) Questions(ids []int64) ([]Question, error) {
 	return qs, nil
 }
 
-// QuestionIDsPage 分页查询题目 ID（type=1 错题；按知识点 + 时间筛选）。
-type QuestionIDsPage struct {
-	Total   int   `json:"total"`
-	Results []int64 `json:"results"`
-}
-
-func (c *Client) QuestionIDsPage(questionType, categoryID int, offset, limit int, tr TimeRange) (*QuestionIDsPage, error) {
-	u := fmt.Sprintf("https://tiku.fenbi.com/api/xingce/questionIds?type=%d&categoryId=%d&offset=%d&limit=%d&order=1&%s&%s",
-		questionType, categoryID, offset, limit, tr.params(), apiParams)
-	var page QuestionIDsPage
-	if _, err := c.GetJSON(u, &page); err != nil {
-		return nil, err
-	}
-	return &page, nil
-}
-
 // ExerciseHistoryItem 练习历史条目。
 type ExerciseHistoryItem struct {
 	ID          int64  `json:"id"`

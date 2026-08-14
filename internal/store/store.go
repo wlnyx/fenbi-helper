@@ -3,6 +3,7 @@ package store
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -104,7 +105,11 @@ func (s *Store) loadLocked() {
 	var d Data
 	if err := json.Unmarshal(b, &d); err != nil {
 		// 损坏自检：备份后重建
-		os.Rename(s.file(), s.file()+".bak")
+		if rerr := os.Rename(s.file(), s.file()+".bak"); rerr != nil {
+			log.Printf("复盘数据损坏且备份失败: %v (原始错误: %v)", rerr, err)
+		} else {
+			log.Printf("复盘数据损坏，已备份为 .bak 并重建: %v", err)
+		}
 		return
 	}
 	if d.Questions == nil {
@@ -129,7 +134,7 @@ func (s *Store) flush() error {
 		return err
 	}
 	tmp := s.file() + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o644); err != nil {
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
 		return err
 	}
 	if err := os.Rename(tmp, s.file()); err != nil {
