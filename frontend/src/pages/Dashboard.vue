@@ -1,21 +1,60 @@
 <template>
   <div>
-    <h1 class="page-title">复盘工作台</h1>
-    <el-skeleton :loading="loading" animated :rows="8">
+    <h1 class="page-title" style="display:flex;align-items:center;gap:12px;">
+      复盘工作台
+      <el-tooltip content="强制刷新" placement="top">
+        <el-button size="small" circle text @click="reload">
+          <el-icon><Refresh /></el-icon>
+        </el-button>
+      </el-tooltip>
+    </h1>
+    <el-skeleton :loading="loading" animated :rows="12">
       <template #default>
         <!-- KPI 统计行 -->
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px;">
+        <div class="kpi-grid">
           <div v-for="k in kpis" :key="k.label" class="bento-card" style="text-align:center;padding:18px 12px;">
             <div class="kpi-num" :style="{ color: k.color }">{{ k.value }}</div>
             <div class="kpi-label">{{ k.label }}</div>
           </div>
         </div>
 
-        <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:16px;margin-bottom:20px;">
-          <!-- 今日复习 2x2 -->
+        <!-- 图表区：趋势 + Donut -->
+        <div class="grid-2">
           <div class="bento-card">
-            <div class="bento-card-title"><el-icon><Calendar /></el-icon> 今日复习</div>
-            <el-empty v-if="!data.queue.length" description="暂无待复习题目" :image-size="60">
+            <div class="bento-card-title"><el-icon><TrendCharts /></el-icon> 近30天练习趋势</div>
+            <div ref="trendChart" class="chart-box"></div>
+          </div>
+          <div class="bento-card">
+            <div class="bento-card-title"><el-icon><PieChart /></el-icon> 错误类型分布</div>
+            <div v-if="totalCat === 0" class="empty-hint">还没有归类记录</div>
+            <div v-else ref="donutChart" class="chart-box"></div>
+          </div>
+        </div>
+
+        <!-- 热力图 + Waffle -->
+        <div class="grid-2">
+          <div class="bento-card">
+            <div class="bento-card-title"><el-icon><Calendar /></el-icon> 年度刷题热力图</div>
+            <div v-if="!hasHeatmap" class="empty-hint">暂无练习数据</div>
+            <div v-else ref="heatmapChart" class="chart-box heatmap-box"></div>
+          </div>
+          <div class="bento-card">
+            <div class="bento-card-title"><el-icon><Odometer /></el-icon> 复习状态占比</div>
+            <div v-if="stateTotal === 0" class="empty-hint">暂无复盘数据</div>
+            <div v-else ref="waffleChart" class="waffle-box"></div>
+          </div>
+        </div>
+
+        <!-- 雷达 + 今日复习 -->
+        <div class="grid-2">
+          <div class="bento-card">
+            <div class="bento-card-title"><el-icon><Aim /></el-icon> 模块能力雷达</div>
+            <div v-if="!moduleStats.length" class="empty-hint">暂无错题数据</div>
+            <div v-else ref="radarChart" class="chart-box"></div>
+          </div>
+          <div class="bento-card">
+            <div class="bento-card-title"><el-icon><List /></el-icon> 今日复习</div>
+            <el-empty v-if="!data.queue.length" description="暂无待复习题目" :image-size="50">
               <el-button type="primary" size="small" @click="$router.push('/wrong')">去错题本</el-button>
             </el-empty>
             <div v-else>
@@ -29,38 +68,12 @@
               <el-button link type="primary" size="small" @click="$router.push('/review')">查看全部 →</el-button>
             </div>
           </div>
-
-          <!-- 错误类型分布 1x1 -->
-          <div class="bento-card">
-            <div class="bento-card-title"><el-icon><DataAnalysis /></el-icon> 错误类型分布</div>
-            <el-empty v-if="!totalCat" description="还没有归类记录" :image-size="50" />
-            <div v-else v-for="c in categories" :key="c" class="cat-row">
-              <span class="cat-name">{{ c }}</span>
-              <div class="cat-bar">
-                <div class="cat-bar-inner" :style="{ width: pctCat(catCount[c] || 0) + '%', background: catColor(c) }"></div>
-              </div>
-              <span class="cat-num">{{ catCount[c] || 0 }}</span>
-            </div>
-          </div>
-
-          <!-- 难度分布 1x1 -->
-          <div class="bento-card">
-            <div class="bento-card-title"><el-icon><TrendCharts /></el-icon> 复习状态</div>
-            <el-empty v-if="!stateTotal" description="暂无数据" :image-size="50" />
-            <div v-else v-for="s in states" :key="s.label" class="cat-row">
-              <span class="cat-name">{{ s.label }}</span>
-              <div class="cat-bar">
-                <div class="cat-bar-inner" :style="{ width: pctState(s.value) + '%', background: s.color }"></div>
-              </div>
-              <span class="cat-num">{{ s.value }}</span>
-            </div>
-          </div>
         </div>
 
-        <!-- 近期练习 全宽 -->
+        <!-- 近期练习 -->
         <div class="bento-card">
           <div class="bento-card-title"><el-icon><Document /></el-icon> 近期练习</div>
-          <el-empty v-if="!data.recentHistory.length" description="暂无练习记录" :image-size="60" />
+          <el-empty v-if="!data.recentHistory.length" description="暂无练习记录" :image-size="50" />
           <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:0 24px;">
             <div v-for="h in data.recentHistory" :key="h.id" class="queue-item" @click="$router.push('/exercise/' + h.id)">
               <span class="queue-title">{{ h.name }}</span>
@@ -75,13 +88,23 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { getDashboard } from '../api'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import * as echarts from 'echarts'
+import { getDashboard, forceRefresh } from '../api'
 
 const loading = ref(true)
-const data = ref({ queue: [], recentHistory: [], categoryCount: {} })
+const data = ref({ queue: [], recentHistory: [], categoryCount: {}, trend: [], heatmap: {}, moduleStats: [] })
 const categories = ['找数瞎', '列式乱', '计算蠢', '掉坑快', '死磕傻', '读不懂']
 const catColors = ['#0D9488', '#6D28D9', '#EA580C', '#DC2626', '#92400E', '#0891B2']
+const stateColors = { 待复习: '#86868B', 重点: '#EA580C', 已掌握: '#0D9488', 未复盘: '#B45309' }
+
+const chartRefs = {}
+const trendChart = ref(null); chartRefs.trend = trendChart
+const donutChart = ref(null); chartRefs.donut = donutChart
+const heatmapChart = ref(null); chartRefs.heatmap = heatmapChart
+const waffleChart = ref(null); chartRefs.waffle = waffleChart
+const radarChart = ref(null); chartRefs.radar = radarChart
+let instances = []
 
 const kpis = computed(() => [
   { label: '待复习', value: data.value.totalReview ?? 0, color: '#1D1D1F' },
@@ -98,22 +121,232 @@ const states = computed(() => [
   { label: '已掌握', value: data.value.mastered ?? 0, color: '#0D9488' },
   { label: '未复盘', value: data.value.unreviewed ?? 0, color: '#B45309' }
 ])
+const hasHeatmap = computed(() => Object.keys(data.value.heatmap || {}).length > 0)
+const moduleStats = computed(() => data.value.moduleStats || [])
 
 const pctCat = (n) => (totalCat.value ? Math.round(n / totalCat.value * 100) : 0)
-const pctState = (n) => (stateTotal.value ? Math.round(n / stateTotal.value * 100) : 0)
 const catColor = (c) => catColors[categories.indexOf(c)]
 
-onMounted(async () => {
+const TOOLTIP_STYLE = {
+  backgroundColor: 'rgba(29,29,31,.92)', borderWidth: 0,
+  textStyle: { color: '#fff', fontSize: 12 }
+}
+
+function makeInstance(refName) {
+  const el = chartRefs[refName].value
+  if (!el) return null
+  const inst = echarts.getInstanceByDom(el) || echarts.init(el)
+  instances.push(inst)
+  return inst
+}
+
+function renderTrend() {
+  const trend = data.value.trend || []
+  if (!trend.length) return
+  const inst = makeInstance('trend')
+  inst.setOption({
+    animationDuration: 800,
+    tooltip: { ...TOOLTIP_STYLE, trigger: 'axis' },
+    legend: { data: ['练习量', '正确率'], top: 0, icon: 'circle', itemWidth: 8, textStyle: { fontSize: 12 } },
+    grid: { left: 44, right: 50, top: 32, bottom: 24 },
+    xAxis: { type: 'category', data: trend.map(t => t.date), axisLine: { lineStyle: { color: '#E8E8ED' } }, axisTick: { show: false }, axisLabel: { fontSize: 10, color: '#86868B', interval: 4 } },
+    yAxis: [
+      { type: 'value', name: '题数', nameTextStyle: { fontSize: 10, color: '#86868B' }, axisLabel: { fontSize: 10 }, splitLine: { lineStyle: { color: '#F0F0F4' } } },
+      { type: 'value', name: '正确率%', min: 0, max: 100, nameTextStyle: { fontSize: 10, color: '#86868B' }, axisLabel: { fontSize: 10 }, splitLine: { show: false } }
+    ],
+    series: [
+      { name: '练习量', type: 'bar', data: trend.map(t => t.count), barWidth: '55%',
+        itemStyle: { color: 'rgba(13,148,136,.85)', borderRadius: [3, 3, 0, 0] } },
+      { name: '正确率', type: 'line', yAxisIndex: 1, data: trend.map(t => t.correctRate),
+        smooth: true, symbol: 'circle', symbolSize: 4,
+        lineStyle: { color: '#EA580C', width: 2 }, itemStyle: { color: '#EA580C' } }
+    ]
+  })
+}
+
+function renderDonut() {
+  const inst = makeInstance('donut')
+  const data2 = categories.map((c, i) => ({ name: c, value: catCount.value[c] || 0 })).filter(d => d.value > 0)
+  inst.setOption({
+    animationDuration: 800,
+    tooltip: { ...TOOLTIP_STYLE, trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+    legend: { bottom: 0, icon: 'circle', itemWidth: 8, textStyle: { fontSize: 11 }, itemGap: 8 },
+    series: [{
+      type: 'pie', radius: ['52%', '72%'], center: ['50%', '44%'],
+      data: data2,
+      itemStyle: { borderColor: '#fff', borderWidth: 2 },
+      label: { show: false },
+      emphasis: { label: { show: true, fontSize: 13, fontWeight: 600 } },
+      labelLine: { show: false }
+    }]
+  })
+  // 中心总数
+  inst.setOption({
+    graphic: [{
+      type: 'text', left: 'center', top: '40%',
+      style: { text: String(totalCat.value), textAlign: 'center', fill: '#1D1D1F', fontSize: 26, fontWeight: 700 }
+    }, {
+      type: 'text', left: 'center', top: '52%',
+      style: { text: '已归类', textAlign: 'center', fill: '#86868B', fontSize: 11 }
+    }]
+  })
+}
+
+function renderHeatmap() {
+  const inst = makeInstance('heatmap')
+  const hm = data.value.heatmap || {}
+  // 生成近 365 天序列（从最早的记录或 365 天前）
+  const start = new Date()
+  start.setDate(start.getDate() - 364)
+  const days = []
+  const values = []
+  for (let i = 0; i < 365; i++) {
+    const d = new Date(start)
+    d.setDate(start.getDate() + i)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    days.push(key)
+    values.push(hm[key] || 0)
+  }
+  const max = Math.max(...values, 1)
+  inst.setOption({
+    animationDuration: 600,
+    tooltip: {
+      ...TOOLTIP_STYLE,
+      formatter: (p) => {
+        const d = days[p.data[0]]
+        return `${d}<br/>刷题：${values[p.data[0]]} 题`
+      }
+    },
+    grid: { left: 8, right: 8, top: 10, bottom: 20 },
+    xAxis: { type: 'category', data: days.map(d => d.slice(5)), splitArea: { show: true }, axisLine: { show: false }, axisTick: { show: false }, axisLabel: { fontSize: 9, color: '#86868B', interval: 50 } },
+    yAxis: { type: 'category', data: ['一', '二', '三', '四', '五', '六', '日'], splitArea: { show: true }, axisLine: { show: false }, axisTick: { show: false }, axisLabel: { fontSize: 9, color: '#86868B' } },
+    visualMap: {
+      min: 0, max, calculable: false, orient: 'horizontal', left: 'center', bottom: 0,
+      itemWidth: 10, itemHeight: 90,
+      inRange: { color: ['#F0FDFA', '#A3DCD6', '#0D9488', '#065F56'] },
+      text: ['多', '少'], textStyle: { fontSize: 9, color: '#86868B' }
+    },
+    series: [{
+      type: 'heatmap',
+      data: days.map((d, i) => [i % 7, Math.floor(i / 7), values[i]]),
+      itemStyle: { borderRadius: 2 }
+    }]
+  })
+}
+
+function renderWaffle() {
+  const inst = makeInstance('waffle')
+  // 100 格 Waffle，按状态占比填充
+  const cells = []
+  const statesData = states.value.filter(s => s.value > 0)
+  const total = stateTotal.value || 1
+  let acc = 0
+  statesData.forEach(s => {
+    const n = Math.round(s.value / total * 100)
+    for (let i = 0; i < n; i++) {
+      cells.push({ value: s.value, itemStyle: { color: s.color } })
+      acc++
+    }
+  })
+  while (cells.length < 100) cells.push({ value: 0, itemStyle: { color: '#F0F0F4' } })
+  inst.setOption({
+    animationDuration: 500,
+    tooltip: {
+      ...TOOLTIP_STYLE,
+      formatter: (p) => {
+        if (!p.data.value) return '未复盘空间'
+        return `状态：${statesData.find(s => s.value === p.data.value)?.label || ''}<br/>数量：${p.data.value}`
+      }
+    },
+    grid: { left: 8, right: 8, top: 8, bottom: 30 },
+    xAxis: { type: 'category', data: Array.from({ length: 10 }, (_, i) => i + 1), splitArea: { show: false }, axisLine: { show: false }, axisTick: { show: false }, axisLabel: { show: false } },
+    yAxis: { type: 'category', data: Array.from({ length: 10 }, (_, i) => i + 1), splitArea: { show: false }, axisLine: { show: false }, axisTick: { show: false }, axisLabel: { show: false } },
+    visualMap: { show: false },
+    series: [{
+      type: 'heatmap',
+      data: cells.map((c, i) => [i % 10, Math.floor(i / 10), c.value]),
+      itemStyle: { borderColor: '#fff', borderWidth: 1.5, borderRadius: 2 }
+    }]
+  })
+  // 图例
+  inst.setOption({
+    graphic: statesData.map((s, i) => ({
+      type: 'group', left: 8 + i * 90, top: 'calc(100% - 24px)',
+      children: [
+        { type: 'rect', shape: { x: 0, y: 0, width: 10, height: 10 }, style: { fill: s.color } },
+        { type: 'text', left: 14, top: -2, style: { text: `${s.label} ${s.value}`, fill: '#86868B', fontSize: 10 } }
+      ]
+    }))
+  })
+}
+
+function renderRadar() {
+  const inst = makeInstance('radar')
+  const ms = moduleStats.value
+  const names = ms.map(m => m.module)
+  const counts = ms.map(m => m.count)
+  const diffs = ms.map(m => m.avgDiff)
+  const maxCount = Math.max(...counts, 1)
+  inst.setOption({
+    animationDuration: 800,
+    tooltip: { ...TOOLTIP_STYLE, trigger: 'item' },
+    legend: { data: ['错题数', '平均难度'], top: 0, icon: 'circle', itemWidth: 8, textStyle: { fontSize: 11 } },
+    radar: {
+      indicator: names.map(n => ({ name: n, max: Math.max(maxCount, 10) })),
+      radius: '62%', center: ['50%', '54%'],
+      axisName: { fontSize: 10, color: '#3a3a3c' },
+      splitArea: { areaStyle: { color: ['#fff', '#FAFAFC'] } },
+      splitLine: { lineStyle: { color: '#E8E8ED' } },
+      axisLine: { lineStyle: { color: '#E8E8ED' } }
+    },
+    series: [
+      { type: 'radar', name: '错题数', data: [{ value: counts, itemStyle: { color: '#0D9488' }, areaStyle: { color: 'rgba(13,148,136,.18)' } }] },
+      { type: 'radar', name: '平均难度', data: [{ value: diffs, itemStyle: { color: '#EA580C' }, areaStyle: { color: 'rgba(234,88,12,.15)' } }] }
+    ]
+  })
+}
+
+function renderAll() {
+  // 清理旧实例
+  instances.forEach(i => i.dispose())
+  instances = []
+  renderTrend()
+  renderDonut()
+  renderHeatmap()
+  renderWaffle()
+  renderRadar()
+}
+
+async function load() {
+  loading.value = true
   try {
     const res = await getDashboard()
     if (res.code === 200) data.value = res.data
   } finally {
     loading.value = false
+    setTimeout(renderAll, 50)
   }
-})
+}
+
+function reload() {
+  forceRefresh('dashboard')
+  load()
+}
+
+onMounted(load)
+onUnmounted(() => instances.forEach(i => i.dispose()))
 </script>
 
 <style scoped>
+.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+.grid-2 { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; margin-bottom: 20px; }
+@media (max-width: 1024px) {
+  .grid-2 { grid-template-columns: 1fr; }
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+}
+.chart-box { height: 260px; }
+.heatmap-box { height: 190px; }
+.waffle-box { height: 240px; display: flex; align-items: center; }
 .queue-item {
   display: flex; align-items: center; gap: 10px;
   padding: 9px 6px;
@@ -125,9 +358,5 @@ onMounted(async () => {
 .queue-item:hover { background: #FAFAFC; }
 .queue-item:last-child { border-bottom: none; }
 .queue-title { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cat-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 13px; }
-.cat-bar { height: 10px; border-radius: 5px; background: #F0F0F4; overflow: hidden; flex: 1; }
-.cat-bar-inner { height: 100%; border-radius: 5px; transition: width 300ms ease; }
-.cat-name { width: 48px; color: var(--el-text-color-regular); }
-.cat-num { width: 28px; text-align: right; color: var(--el-text-color-secondary); font-variant-numeric: tabular-nums; }
+.empty-hint { color: var(--el-text-color-secondary); padding: 40px 0; text-align: center; font-size: 13px; }
 </style>

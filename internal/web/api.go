@@ -313,7 +313,124 @@ func (s *Server) apiDashboard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	data["recentHistory"] = recentHistory
+
+	// 练习趋势 + 热力图（粉笔侧数据，60s 短缓存）
+	data["trend"] = s.dashboardTrend()
+	data["heatmap"] = s.dashboardHeatmap()
+
+	// 模块统计（错题维度，随 dashboard 5min 缓存）
+	data["moduleStats"] = s.dashboardModuleStats()
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{"code": 200, "data": data, "categories": store.ErrorCategories})
+}
+
+// dashboardTrend 近 30 天每日练习量 + 正确率（题量加权）。
+func (s *Server) dashboardTrend() []interface{} {
+	key := "dashboard-trend"
+	if v, ok := s.cache.Get(key); ok {
+		return v.([]interface{})
+	}
+	hist, err := s.Fenbi.History()
+	if err != nil {
+		return []interface{}{}
+	}
+	now := time.Now()
+	days := make([]time.Time, 30)
+	idx := map[string]int{}
+	for i := 29; i >= 0; i-- {
+		d := now.AddDate(0, 0, -(29 - i))
+		days[i] = d
+		idx[d.Format("2006-01-02")] = i
+	}
+	counts := make([]int, 30)
+	correctSum := make([]float64, 30)
+	answerSum := make([]int, 30)
+	for _, h := range hist {
+		t := time.UnixMilli(h.UpdatedTime)
+		i, ok := idx[t.Format("2006-01-02")]
+		if !ok {
+			continue
+		}
+		counts[i] += h.AnswerCount
+		correctSum[i] += float64(h.AnswerCount) * h.CorrectRate / 100
+		answerSum[i] += h.AnswerCount
+	}
+	out := make([]interface{}, 30)
+	for i := 0; i < 30; i++ {
+		rate := 0.0
+		if answerSum[i] > 0 {
+			rate = correctSum[i] / float64(answerSum[i]) * 100
+		}
+		out[i] = map[string]interface{}{
+			"date":        days[i].Format("01-02"),
+			"count":       counts[i],
+			"correctRate": round1(rate),
+		}
+	}
+	s.cache.SetWithTTL(key, out, 60*time.Second)
+	return out
+}
+
+// dashboardHeatmap 近 365 天每日练习题量（date → count）。
+func (s *Server) dashboardHeatmap() map[string]int {
+	key := "dashboard-heatmap"
+	if v, ok := s.cache.Get(key); ok {
+		return v.(map[string]int)
+	}
+	hist, err := s.Fenbi.History()
+	if err != nil {
+		return map[string]int{}
+	}
+	out := map[string]int{}
+	for _, h := range hist {
+		d := time.UnixMilli(h.UpdatedTime).Format("2006-01-02")
+		out[d] += h.AnswerCount
+	}
+	s.cache.SetWithTTL(key, out, 60*time.Second)
+	return out
+}
+
+// dashboardModuleStats 各模块错题数 + 平均难度（复用错题数据缓存）。
+func (s *Server) dashboardModuleStats() []interface{} {
+	groups, err := s.Review.WrongBookData(fenbi.TimeRange{All: true}, false)
+	if err != nil {
+		return []interface{}{}
+	}
+	byModule := map[string]*struct {
+		count int
+		diff  int
+	}{}
+	for _, g := range groups {
+		m, ok := byModule[g.Module]
+		if !ok {
+			m = &struct {
+				count int
+				diff  int
+			}{}
+			byModule[g.Module] = m
+		}
+		m.count += g.Count
+		for _, it := range g.Items {
+			m.diff += it.Difficulty
+		}
+	}
+	out := make([]interface{}, 0, len(byModule))
+	for name, m := range byModule {
+		avgDiff := 0.0
+		if m.count > 0 {
+			avgDiff = float64(m.diff) / float64(m.count)
+		}
+		out = append(out, map[string]interface{}{
+			"module":     name,
+			"count":      m.count,
+			"avgDiff":    round1(avgDiff),
+		})
+	}
+	return out
+}
+
+func round1(f float64) float64 {
+	return float64(int(f*10+0.5)) / 10
 }
 
 // invalidateDataCache 复盘写操作后清空列表类缓存与对应题目缓存。
