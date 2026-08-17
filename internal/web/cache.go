@@ -36,9 +36,14 @@ func (c *memCache) Get(key string) (interface{}, bool) {
 }
 
 func (c *memCache) Set(key string, value interface{}) {
+	c.SetWithTTL(key, value, c.ttl)
+}
+
+// SetWithTTL 带独立 TTL 写入缓存项。
+func (c *memCache) SetWithTTL(key string, value interface{}, ttl time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.items[key] = cacheItem{value: value, expiry: time.Now().Add(c.ttl)}
+	c.items[key] = cacheItem{value: value, expiry: time.Now().Add(ttl)}
 }
 
 func (c *memCache) Invalidate(prefix string) {

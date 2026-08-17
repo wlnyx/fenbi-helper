@@ -212,6 +212,7 @@ func (q *QRLogin) reset() {
 	q.jar = NewSessionJar()
 }
 
+// randomHex 生成随机 hex 串，用作粉笔 API 的 client_context_id 参数。
 func randomHex(n int) string {
 	const hexChars = "0123456789abcdef"
 	b := make([]byte, n)

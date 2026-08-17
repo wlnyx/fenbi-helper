@@ -160,6 +160,7 @@ func (s *Service) buildGroups(leafs []struct {
 	}
 	results := make(chan leafResult, len(leafs))
 	var wg sync.WaitGroup
+	sem := make(chan struct{}, 8) // 并发上限，避免触发粉笔 API 频率限制
 	for _, leaf := range leafs {
 		if len(leaf.IDs) == 0 {
 			continue
@@ -171,6 +172,8 @@ func (s *Service) buildGroups(leafs []struct {
 			IDs  []int64
 		}) {
 			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
 			qs, err := s.Fenbi.Questions(leaf.IDs)
 			if err != nil {
 				return

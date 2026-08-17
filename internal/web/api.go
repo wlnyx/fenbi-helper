@@ -3,6 +3,7 @@ package web
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/wlnyx/fenbi-helper-go/internal/fenbi"
 	"github.com/wlnyx/fenbi-helper-go/internal/review"
@@ -131,7 +132,13 @@ func (s *Server) apiSessionInfo(w http.ResponseWriter, r *http.Request) {
 
 // apiSessionLogout 退出登录：清除浏览器会话标记 + 服务端凭据。
 func (s *Server) apiSessionLogout(w http.ResponseWriter, r *http.Request) {
-	http.SetCookie(w, &http.Cookie{Name: "fb_device", Value: "", Path: "/", MaxAge: -1})
+	http.SetCookie(w, &http.Cookie{
+		Name:   "fb_device",
+		Value:  "",
+		Path:   "/",
+		MaxAge: -1,
+		Expires: time.Unix(0, 0), // 兼容不支持 MaxAge 的旧代理
+	})
 	_ = s.Auth.ClearCredentials()
 	writeJSON(w, http.StatusOK, map[string]interface{}{"code": 200})
 }
@@ -283,20 +290,32 @@ func (s *Server) apiDashboard(w http.ResponseWriter, r *http.Request) {
 			cc[rv.ErrorCategory]++
 		}
 	}
-	hist, err := s.Fenbi.History()
-	if err == nil {
-		recent := make([]map[string]interface{}, 0)
-		for i, h := range hist {
-			if i >= 5 {
-				break
+	// recentHistory 是粉笔侧数据（用户完成新练习会变化），用 60s 短缓存，
+	// 避免与 5 分钟统计缓存绑定导致"近期练习"长期陈旧。
+	recentHistory := []interface{}{}
+	if v, ok := s.cache.Get("dashboard-recent"); ok {
+		recentHistory = v.([]interface{})
+	} else {
+		hist, err := s.Fenbi.History()
+		if err == nil {
+			recent := make([]map[string]interface{}, 0)
+			for i, h := range hist {
+				if i >= 5 {
+					break
+				}
+				recent = append(recent, map[string]interface{}{
+					"id": h.ID, "name": h.Sheet.Name,
+					"answerCount": h.AnswerCount, "correctRate": h.CorrectRate,
+				})
 			}
-			recent = append(recent, map[string]interface{}{
-				"id": h.ID, "name": h.Sheet.Name,
-				"answerCount": h.AnswerCount, "correctRate": h.CorrectRate,
-			})
+			recentHistory = make([]interface{}, len(recent))
+			for i, r := range recent {
+				recentHistory[i] = r
+			}
+			s.cache.SetWithTTL("dashboard-recent", recentHistory, 60*time.Second)
 		}
-		data["recentHistory"] = recent
 	}
+	data["recentHistory"] = recentHistory
 	writeJSON(w, http.StatusOK, map[string]interface{}{"code": 200, "data": data, "categories": store.ErrorCategories})
 }
 
