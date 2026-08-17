@@ -3,6 +3,7 @@ package auth
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/wlnyx/fenbi-helper-go/internal/fenbi"
@@ -38,6 +39,9 @@ func TestCredentialsRoundTrip(t *testing.T) {
 }
 
 func TestCredentialFilePermission(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows 不支持 Unix 权限位")
+	}
 	dir := t.TempDir()
 	s := NewStore(dir)
 	dev := DeviceID{DeviceID: "v1_test", UserID: 1, Time: 1}

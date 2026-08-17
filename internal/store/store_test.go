@@ -3,6 +3,7 @@ package store
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -82,6 +83,9 @@ func TestAtomicWrite(t *testing.T) {
 	s.UpdateQuestion("1", func(q *QuestionReview) { q.Doubt = true })
 	if err := s.Save(); err != nil {
 		t.Fatal(err)
+	}
+	if runtime.GOOS == "windows" {
+		return // Windows 不支持 Unix 权限位
 	}
 	// 文件权限应为 0600
 	info, err := os.Stat(s.file())

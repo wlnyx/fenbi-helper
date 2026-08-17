@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
 
 const (
@@ -22,7 +23,7 @@ type Client struct {
 
 func NewClient() *Client {
 	return &Client{
-		HTTP: &http.Client{},
+		HTTP: &http.Client{Timeout: 30 * time.Second},
 	}
 }
 

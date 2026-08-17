@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"time"
 )
 
 // SessionJar 包装 http.CookieJar，支持 dump 会话 Cookie 用于持久化。
@@ -14,7 +15,7 @@ type SessionJar struct {
 
 func NewSessionJar() *SessionJar {
 	jar, _ := cookiejar.New(nil)
-	return &SessionJar{jar: jar, hc: &http.Client{Jar: jar}}
+	return &SessionJar{jar: jar, hc: &http.Client{Jar: jar, Timeout: 30 * time.Second}}
 }
 
 func (s *SessionJar) Client() *http.Client {

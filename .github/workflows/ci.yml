@@ -21,6 +21,14 @@ jobs:
       - name: Go vet
         run: go vet ./...
 
+      - name: gofmt 检查
+        run: |
+          if [ -n "$(gofmt -l internal/)" ]; then
+            echo "以下文件未通过 gofmt:"
+            gofmt -l internal/
+            exit 1
+          fi
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'

@@ -13,12 +13,12 @@ import (
 // JSON API：供 Vue SPA 使用（页面数据 + 复盘操作）。
 
 type apiGroup struct {
-	ID    int64         `json:"id"`
-	Name  string        `json:"name"`
-	Module string       `json:"module"`
-	Sub   string        `json:"sub"`
-	Count int           `json:"count"`
-	Items []apiQuestion `json:"items"`
+	ID     int64         `json:"id"`
+	Name   string        `json:"name"`
+	Module string        `json:"module"`
+	Sub    string        `json:"sub"`
+	Count  int           `json:"count"`
+	Items  []apiQuestion `json:"items"`
 }
 
 type apiQuestion struct {
@@ -53,25 +53,6 @@ func toAPIGroups(groups []review.Group) []apiGroup {
 		out = append(out, apiGroup{ID: g.ID, Name: g.Name, Module: g.Module, Sub: g.Sub, Count: g.Count, Items: items})
 	}
 	return out
-}
-
-type reviewGroup = struct {
-	ID    int64
-	Name  string
-	Module string
-	Sub   string
-	Count int
-	Items []struct {
-		ID            int64
-		Title         string
-		Type          string
-		Difficulty    int
-		ErrorCategory string
-		ReviewState   string
-		HasNote4      bool
-		Archived      bool
-		RedoCount     int
-	}
 }
 
 // 注册 JSON API 路由。
@@ -122,10 +103,10 @@ func (s *Server) apiReviewQueue(w http.ResponseWriter, r *http.Request) {
 func (s *Server) apiSessionInfo(w http.ResponseWriter, r *http.Request) {
 	dev, cookies := s.Auth.LoadCredentials()
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"code":       200,
-		"userId":     dev.UserID,
-		"deviceId":   dev.DeviceID,
-		"loginTime":  dev.Time,
+		"code":        200,
+		"userId":      dev.UserID,
+		"deviceId":    dev.DeviceID,
+		"loginTime":   dev.Time,
 		"cookieCount": len(cookies),
 	})
 }
@@ -133,11 +114,12 @@ func (s *Server) apiSessionInfo(w http.ResponseWriter, r *http.Request) {
 // apiSessionLogout 退出登录：清除浏览器会话标记 + 服务端凭据。
 func (s *Server) apiSessionLogout(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
-		Name:   "fb_device",
-		Value:  "",
-		Path:   "/",
-		MaxAge: -1,
-		Expires: time.Unix(0, 0), // 兼容不支持 MaxAge 的旧代理
+		Name:     "fb_device",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		Expires:  time.Unix(0, 0), // 兼容不支持 MaxAge 的旧代理
+		SameSite: http.SameSiteLaxMode,
 	})
 	_ = s.Auth.ClearCredentials()
 	writeJSON(w, http.StatusOK, map[string]interface{}{"code": 200})

@@ -5,7 +5,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/wlnyx/fenbi-helper-go/internal/fenbi"
 	"github.com/wlnyx/fenbi-helper-go/internal/store"
@@ -23,12 +22,12 @@ func NewService(f *fenbi.Client, s *store.Store) *Service {
 
 // Group 页面上的一个知识点分组。
 type Group struct {
-	ID       int64         `json:"id"`
-	Name     string        `json:"name"`
-	Module   string        `json:"module"`
-	Sub      string        `json:"sub"`
-	Count    int           `json:"count"`
-	Items    []QuestionItem `json:"items"`
+	ID     int64          `json:"id"`
+	Name   string         `json:"name"`
+	Module string         `json:"module"`
+	Sub    string         `json:"sub"`
+	Count  int            `json:"count"`
+	Items  []QuestionItem `json:"items"`
 }
 
 // QuestionItem 带复盘信息的题目条目。
@@ -221,11 +220,15 @@ func (s *Service) buildGroups(leafs []struct {
 			continue
 		}
 		segments := strings.Split(leaf.Name, " / ")
+		sub := ""
+		if len(segments) > 1 {
+			sub = segments[1]
+		}
 		groups = append(groups, Group{
 			ID:     leaf.ID,
 			Name:   leaf.Name,
 			Module: segments[0],
-			Sub:    segments[1],
+			Sub:    sub,
 			Count:  len(items),
 			Items:  items,
 		})
@@ -307,11 +310,6 @@ func (s *Service) enrichEntries(ids []int64, reviews map[string]*store.QuestionR
 		})
 	}
 	return entries
-}
-
-// Today 今天是第几天用于（暂保留，供后续扩展）。
-func Today() string {
-	return time.Now().Format("2006-01-02")
 }
 
 // UsedCategories 收集已用过的错误归类标签（预设 + 自定义，去重）。

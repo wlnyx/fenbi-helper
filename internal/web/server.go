@@ -223,10 +223,11 @@ func (s *Server) handleSessionApply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.SetCookie(w, &http.Cookie{
-		Name:    "fb_device",
-		Value:   "1",
-		Path:    "/",
-		Expires: time.Date(2099, 7, 6, 0, 0, 0, 0, time.UTC),
+		Name:     "fb_device",
+		Value:    "1",
+		Path:     "/",
+		Expires:  time.Date(2099, 7, 6, 0, 0, 0, 0, time.UTC),
+		SameSite: http.SameSiteLaxMode,
 	})
 	writeJSON(w, http.StatusOK, map[string]interface{}{"code": 200, "redirectPath": "/dashboard"})
 }

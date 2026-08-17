@@ -36,21 +36,21 @@ type RedoRecord struct {
 
 // QuestionReview 单题的复盘数据。
 type QuestionReview struct {
-	Doubt         bool        `json:"doubt"` // ① 存疑标记
-	ErrorCategory string      `json:"errorCategory,omitempty"` // ③
-	RedoHistory   []RedoRecord `json:"redoHistory,omitempty"`  // ②
-	ReviewState   string      `json:"reviewState,omitempty"`   // ⑥ pending/mastered/flagged
-	Note4         *Note4      `json:"note4,omitempty"`         // ④
-	Archived      bool        `json:"archived,omitempty"`      // 归档
-	UpdatedAt     int64       `json:"updatedAt"`
+	Doubt         bool         `json:"doubt"`                   // ① 存疑标记
+	ErrorCategory string       `json:"errorCategory,omitempty"` // ③
+	RedoHistory   []RedoRecord `json:"redoHistory,omitempty"`   // ②
+	ReviewState   string       `json:"reviewState,omitempty"`   // ⑥ pending/mastered/flagged
+	Note4         *Note4       `json:"note4,omitempty"`         // ④
+	Archived      bool         `json:"archived,omitempty"`      // 归档
+	UpdatedAt     int64        `json:"updatedAt"`
 }
 
 // MacroSummary 套卷宏观总结（六步法第五步）。
 type MacroSummary struct {
-	TopErrorType   string `json:"topErrorType,omitempty"`   // 占比最高的错误类型
+	TopErrorType    string `json:"topErrorType,omitempty"`    // 占比最高的错误类型
 	SlowestMaterial string `json:"slowestMaterial,omitempty"` // 耗时最长材料及原因
-	Trap           string `json:"trap,omitempty"`           // 本次最容易踩的陷阱
-	Rules          string `json:"rules,omitempty"`          // 可执行做题规范
+	Trap            string `json:"trap,omitempty"`            // 本次最容易踩的陷阱
+	Rules           string `json:"rules,omitempty"`           // 可执行做题规范
 }
 
 // ExerciseReview 一次练习的复盘数据。
@@ -66,11 +66,11 @@ type Data struct {
 
 // Store 按 userId 隔离的本地复盘存储。
 type Store struct {
-	mu      sync.Mutex
-	dir     string
-	userID  int64
-	cache   *Data
-	dirty   bool
+	mu     sync.Mutex
+	dir    string
+	userID int64
+	cache  *Data
+	dirty  bool
 }
 
 func NewStore(dir string) *Store {
@@ -155,7 +155,7 @@ func (s *Store) mark() {
 	s.dirty = true
 }
 
-// Question 获取单题复盘数据（无则初始化）。
+// Question 获取单题复盘数据（无则初始化）。返回拷贝，避免锁外数据竞争。
 func (s *Store) Question(qid string) *QuestionReview {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -165,7 +165,8 @@ func (s *Store) Question(qid string) *QuestionReview {
 		q = &QuestionReview{ReviewState: StatePending}
 		s.cache.Questions[qid] = q
 	}
-	return q
+	cp := *q
+	return &cp
 }
 
 // UpdateQuestion 更新单题复盘字段。

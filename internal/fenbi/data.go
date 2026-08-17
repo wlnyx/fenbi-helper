@@ -14,7 +14,7 @@ import (
 
 // TimeRange 时间筛选：All 或 Days(-1 为自定义)
 type TimeRange struct {
-	All       bool      // true: timeRange=0 全部
+	All        bool      // true: timeRange=0 全部
 	Start, End time.Time // 自定义起止
 }
 
@@ -37,11 +37,11 @@ type KeypointNode struct {
 
 // Question 题目数据。
 type Question struct {
-	ID       int64  `json:"id"`
-	Content  string `json:"content"`
-	Material string `json:"material"`
-	Type     int    `json:"type"`
-	Difficulty int  `json:"difficulty"`
+	ID          int64  `json:"id"`
+	Content     string `json:"content"`
+	Material    string `json:"material"`
+	Type        int    `json:"type"`
+	Difficulty  int    `json:"difficulty"`
 	Accessories []struct {
 		Options []string `json:"options"`
 		Type    int      `json:"type"`
@@ -90,16 +90,16 @@ func (c *Client) Questions(ids []int64) ([]Question, error) {
 
 // ExerciseHistoryItem 练习历史条目。
 type ExerciseHistoryItem struct {
-	ID          int64  `json:"id"`
-	Status      int    `json:"status"`
-	UpdatedTime int64  `json:"updatedTime"`
+	ID          int64 `json:"id"`
+	Status      int   `json:"status"`
+	UpdatedTime int64 `json:"updatedTime"`
 	Sheet       struct {
 		Name string `json:"name"`
 	} `json:"sheet"`
-	AnswerCount int `json:"answerCount"`
-	ElapsedTime int `json:"elapsedTime"`
+	AnswerCount int     `json:"answerCount"`
+	ElapsedTime int     `json:"elapsedTime"`
 	CorrectRate float64 `json:"correctRate"`
-	Client      string `json:"client"`
+	Client      string  `json:"client"`
 }
 
 // ExerciseReport 练习报告。
@@ -293,9 +293,9 @@ func (c *Client) ExerciseReport(exerciseID int64) (*ExerciseReport, error) {
 
 // Solution 解析。
 type Solution struct {
-	Content     string `json:"content"`
-	Solution    string `json:"solution"`
-	Difficulty  int    `json:"difficulty"`
+	Content       string `json:"content"`
+	Solution      string `json:"solution"`
+	Difficulty    int    `json:"difficulty"`
 	CorrectAnswer struct {
 		Choice string `json:"choice"`
 	} `json:"correctAnswer"`

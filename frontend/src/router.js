@@ -18,4 +18,12 @@ const router = createRouter({
   routes
 })
 
+// 路由守卫：未登录时访问受保护页面跳转登录页
+router.beforeEach((to) => {
+  if (to.meta.auth && !document.cookie.includes('fb_device=1')) {
+    return { path: '/setup', query: { redirect: to.fullPath } }
+  }
+  return true
+})
+
 export default router

@@ -122,7 +122,7 @@ func (q *QRLogin) Status() (state string, msg string, err error) {
 	body, _ := io.ReadAll(resp.Body)
 
 	var st struct {
-		Code int `json:"code"`
+		Code int    `json:"code"`
 		Msg  string `json:"msg"`
 		Data int    `json:"data"`
 	}
