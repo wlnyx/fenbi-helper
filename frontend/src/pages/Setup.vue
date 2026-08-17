@@ -17,10 +17,11 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { qrStart, qrStatus, qrFinish, sessionApply } from '../api'
 import http from '../api'
 
+const route = useRoute()
 const router = useRouter()
 const qrSrc = ref('')
 const qrReady = ref(false)
@@ -77,7 +78,10 @@ async function poll() {
         const f = await qrFinish()
         if (f.data.code === 200) {
           const a = await sessionApply()
-          if (a.data.code === 200) router.push(a.data.redirectPath || '/dashboard')
+          if (a.data.code === 200) {
+            const redirect = (typeof route.query.redirect === 'string' && route.query.redirect) || a.data.redirectPath || '/dashboard'
+            router.push(redirect)
+          }
         } else {
           msg.value = '登录失败：' + (f.data.msg || '')
           qrFailed.value = true

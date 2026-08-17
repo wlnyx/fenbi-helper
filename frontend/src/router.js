@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import http from './api'
 
 const routes = [
   { path: '/', redirect: '/dashboard' },
@@ -18,10 +19,17 @@ const router = createRouter({
   routes
 })
 
-// 路由守卫：未登录时访问受保护页面跳转登录页
-router.beforeEach((to) => {
-  if (to.meta.auth && !document.cookie.includes('fb_device=1')) {
-    return { path: '/setup', query: { redirect: to.fullPath } }
+// 路由守卫：未登录时访问受保护页面跳转登录页（服务端校验，HttpOnly cookie 前端不可读）
+router.beforeEach(async (to) => {
+  if (to.meta.auth) {
+    try {
+      const res = await http.get('/session/info')
+      if (res.data.code !== 200 || !res.data.userId) {
+        return { path: '/setup', query: { redirect: to.fullPath } }
+      }
+    } catch {
+      return { path: '/setup', query: { redirect: to.fullPath } }
+    }
   }
   return true
 })

@@ -119,6 +119,7 @@ func (s *Server) apiSessionLogout(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		MaxAge:   -1,
 		Expires:  time.Unix(0, 0), // 兼容不支持 MaxAge 的旧代理
+		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
 	_ = s.Auth.ClearCredentials()

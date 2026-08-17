@@ -171,7 +171,7 @@ func (c *Client) ExerciseDetail(exerciseID int64) ([]ExerciseItem, error) {
 		return nil, nil
 	}
 
-	// 批量补难度/标题
+	// 批量补难度/标题（solutions 返回顺序不保证与请求一致，按 questionID 映射）
 	ids := make([]int64, 0, len(done))
 	for _, d := range done {
 		ids = append(ids, d.questionID)
@@ -180,13 +180,14 @@ func (c *Client) ExerciseDetail(exerciseID int64) ([]ExerciseItem, error) {
 	if err != nil {
 		return nil, err
 	}
+	solByID := map[int64]Solution{}
+	for _, sol := range sols {
+		solByID[sol.ID] = sol
+	}
 
 	var items []ExerciseItem
 	for i, d := range done {
-		var sol Solution
-		if i < len(sols) {
-			sol = sols[i]
-		}
+		sol := solByID[d.questionID]
 		idx := d.ua.QuestionIndex + 1
 		if idx <= 0 {
 			idx = i + 1
@@ -257,10 +258,13 @@ func (c *Client) History() ([]ExerciseHistoryItem, error) {
 	}
 	results := make(chan reportResult, len(pending))
 	var wg sync.WaitGroup
+	sem := make(chan struct{}, 8) // 并发上限，防粉笔 API 频率限制
 	for _, id := range pending {
 		wg.Add(1)
 		go func(id int64) {
 			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
 			rep, err := c.ExerciseReport(id)
 			results <- reportResult{id: id, rep: rep, err: err}
 		}(id)
@@ -293,6 +297,7 @@ func (c *Client) ExerciseReport(exerciseID int64) (*ExerciseReport, error) {
 
 // Solution 解析。
 type Solution struct {
+	ID            int64  `json:"id"`
 	Content       string `json:"content"`
 	Solution      string `json:"solution"`
 	Difficulty    int    `json:"difficulty"`

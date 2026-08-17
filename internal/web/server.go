@@ -227,6 +227,7 @@ func (s *Server) handleSessionApply(w http.ResponseWriter, r *http.Request) {
 		Value:    "1",
 		Path:     "/",
 		Expires:  time.Date(2099, 7, 6, 0, 0, 0, 0, time.UTC),
+		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
 	writeJSON(w, http.StatusOK, map[string]interface{}{"code": 200, "redirectPath": "/dashboard"})
@@ -234,21 +235,8 @@ func (s *Server) handleSessionApply(w http.ResponseWriter, r *http.Request) {
 
 // --- 工具 ---
 
-// mustJSON 把值序列化为 JSON 字符串。
-func mustJSON(v interface{}) string {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return "[]"
-	}
-	return string(b)
-}
-
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(v)
-}
-
-func hasSuffix(s, suffix string) bool {
-	return len(s) >= len(suffix) && s[len(s)-len(suffix):] == suffix
 }

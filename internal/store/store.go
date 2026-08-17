@@ -184,7 +184,7 @@ func (s *Store) UpdateQuestion(qid string, fn func(q *QuestionReview)) {
 	s.mark()
 }
 
-// Exercise 获取练习复盘数据。
+// Exercise 获取练习复盘数据。返回拷贝，避免锁外数据竞争。
 func (s *Store) Exercise(eid string) *ExerciseReview {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -194,7 +194,8 @@ func (s *Store) Exercise(eid string) *ExerciseReview {
 		e = &ExerciseReview{}
 		s.cache.Exercises[eid] = e
 	}
-	return e
+	cp := *e
+	return &cp
 }
 
 // UpdateExercise 更新练习复盘。
@@ -211,14 +212,15 @@ func (s *Store) UpdateExercise(eid string, fn func(e *ExerciseReview)) {
 	s.mark()
 }
 
-// AllQuestions 返回全部题目复盘数据（快照）。
+// AllQuestions 返回全部题目复盘数据（深拷贝快照）。
 func (s *Store) AllQuestions() map[string]*QuestionReview {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.loadLocked()
 	out := make(map[string]*QuestionReview, len(s.cache.Questions))
 	for k, v := range s.cache.Questions {
-		out[k] = v
+		cp := *v
+		out[k] = &cp
 	}
 	return out
 }
