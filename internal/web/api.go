@@ -194,11 +194,25 @@ func (s *Server) apiQuestion(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]interface{}{"code": 404, "msg": "题目不存在"})
 		return
 	}
-	q := qs[0]
+	// 不假设返回顺序，按 ID 精确匹配
+	var q fenbi.Question
+	for _, item := range qs {
+		if item.ID == qid {
+			q = item
+			break
+		}
+	}
+	if q.ID == 0 {
+		writeJSON(w, http.StatusNotFound, map[string]interface{}{"code": 404, "msg": "题目不存在"})
+		return
+	}
 	sols, _ := s.Fenbi.Solutions([]int64{qid})
 	sol := fenbi.Solution{}
-	if len(sols) > 0 {
-		sol = sols[0]
+	for _, item := range sols {
+		if item.ID == qid {
+			sol = item
+			break
+		}
 	}
 	rv := s.Store.Question(strconv.FormatInt(qid, 10))
 	resp := map[string]interface{}{
