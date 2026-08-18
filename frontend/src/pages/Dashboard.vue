@@ -180,13 +180,13 @@ function renderDonut() {
       labelLine: { show: false }
     }]
   })
-  // 中心总数
+  // 中心总数（graphic 的 left 支持数字/百分比，'center' 非法）
   inst.setOption({
     graphic: [{
-      type: 'text', left: 'center', top: '40%',
+      type: 'text', left: '50%', top: '38%',
       style: { text: String(totalCat.value), textAlign: 'center', fill: '#1D1D1F', fontSize: 26, fontWeight: 700 }
     }, {
-      type: 'text', left: 'center', top: '52%',
+      type: 'text', left: '50%', top: '50%',
       style: { text: '已归类', textAlign: 'center', fill: '#86868B', fontSize: 11 }
     }]
   })
@@ -195,41 +195,43 @@ function renderDonut() {
 function renderHeatmap() {
   const inst = makeInstance('heatmap')
   const hm = data.value.heatmap || {}
-  // 生成近 365 天序列（从最早的记录或 365 天前）
+  // 生成近 365 天数据（date → count），供 calendar 坐标系
   const start = new Date()
   start.setDate(start.getDate() - 364)
-  const days = []
-  const values = []
+  const cells = []
+  const max = Math.max(...Object.values(hm), 1)
   for (let i = 0; i < 365; i++) {
     const d = new Date(start)
     d.setDate(start.getDate() + i)
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-    days.push(key)
-    values.push(hm[key] || 0)
+    cells.push([key, hm[key] || 0])
   }
-  const max = Math.max(...values, 1)
   inst.setOption({
     animationDuration: 600,
     tooltip: {
       ...TOOLTIP_STYLE,
-      formatter: (p) => {
-        const d = days[p.data[0]]
-        return `${d}<br/>刷题：${values[p.data[0]]} 题`
-      }
+      formatter: (p) => `${p.data[0]}<br/>刷题：${p.data[1]} 题`
     },
-    grid: { left: 8, right: 8, top: 10, bottom: 20 },
-    xAxis: { type: 'category', data: days.map(d => d.slice(5)), splitArea: { show: true }, axisLine: { show: false }, axisTick: { show: false }, axisLabel: { fontSize: 9, color: '#86868B', interval: 50 } },
-    yAxis: { type: 'category', data: ['一', '二', '三', '四', '五', '六', '日'], splitArea: { show: true }, axisLine: { show: false }, axisTick: { show: false }, axisLabel: { fontSize: 9, color: '#86868B' } },
+    calendar: {
+      top: 30, left: 40, right: 16, bottom: 30,
+      range: [start.getFullYear() + '-' + String(start.getMonth() + 1).padStart(2, '0'), '2026-12-31'],
+      cellSize: ['auto', 14],
+      itemStyle: { borderWidth: 2, borderColor: '#fff', borderRadius: 2 },
+      splitLine: { lineStyle: { color: '#F0F0F4' } },
+      dayLabel: { fontSize: 9, color: '#86868B' },
+      monthLabel: { fontSize: 10, color: '#86868B' },
+      yearLabel: { show: false }
+    },
     visualMap: {
       min: 0, max, calculable: false, orient: 'horizontal', left: 'center', bottom: 0,
-      itemWidth: 10, itemHeight: 90,
+      itemWidth: 10, itemHeight: 70,
       inRange: { color: ['#F0FDFA', '#A3DCD6', '#0D9488', '#065F56'] },
       text: ['多', '少'], textStyle: { fontSize: 9, color: '#86868B' }
     },
     series: [{
-      type: 'heatmap',
-      data: days.map((d, i) => [i % 7, Math.floor(i / 7), values[i]]),
-      itemStyle: { borderRadius: 2 }
+      type: 'heatmap', coordinateSystem: 'calendar',
+      data: cells.filter(c => c[1] > 0),
+      itemStyle: { borderColor: '#fff', borderWidth: 1, borderRadius: 2 }
     }]
   })
 }
@@ -268,10 +270,10 @@ function renderWaffle() {
       itemStyle: { borderColor: '#fff', borderWidth: 1.5, borderRadius: 2 }
     }]
   })
-  // 图例
+  // 图例（graphic 不支持 calc()，用 'bottom' 定位）
   inst.setOption({
     graphic: statesData.map((s, i) => ({
-      type: 'group', left: 8 + i * 90, top: 'calc(100% - 24px)',
+      type: 'group', left: 8 + i * 88, bottom: 4,
       children: [
         { type: 'rect', shape: { x: 0, y: 0, width: 10, height: 10 }, style: { fill: s.color } },
         { type: 'text', left: 14, top: -2, style: { text: `${s.label} ${s.value}`, fill: '#86868B', fontSize: 10 } }
@@ -284,24 +286,32 @@ function renderRadar() {
   const inst = makeInstance('radar')
   const ms = moduleStats.value
   const names = ms.map(m => m.module)
-  const counts = ms.map(m => m.count)
-  const diffs = ms.map(m => m.avgDiff)
-  const maxCount = Math.max(...counts, 1)
+  const maxCount = Math.max(...ms.map(m => m.count), 1)
+  // 统一量纲到 0-100：错题数按峰值归一，难度按 10 分制归一
+  const countPct = ms.map(m => Math.round(m.count / maxCount * 100))
+  const diffPct = ms.map(m => Math.min(100, Math.round(m.avgDiff / 10 * 100)))
   inst.setOption({
     animationDuration: 800,
-    tooltip: { ...TOOLTIP_STYLE, trigger: 'item' },
-    legend: { data: ['错题数', '平均难度'], top: 0, icon: 'circle', itemWidth: 8, textStyle: { fontSize: 11 } },
+    tooltip: {
+      ...TOOLTIP_STYLE, trigger: 'item',
+      formatter: (p) => {
+        const i = p.dataIndex
+        const m = ms[i]
+        return `${m.module}<br/>错题数：${m.count}<br/>平均难度：${m.avgDiff}/10`
+      }
+    },
+    legend: { data: ['错题数占比', '难度占比'], top: 0, icon: 'circle', itemWidth: 8, textStyle: { fontSize: 11 } },
     radar: {
-      indicator: names.map(n => ({ name: n, max: Math.max(maxCount, 10) })),
-      radius: '62%', center: ['50%', '54%'],
+      indicator: names.map(n => ({ name: n, max: 100 })),
+      radius: '60%', center: ['50%', '55%'],
       axisName: { fontSize: 10, color: '#3a3a3c' },
       splitArea: { areaStyle: { color: ['#fff', '#FAFAFC'] } },
       splitLine: { lineStyle: { color: '#E8E8ED' } },
       axisLine: { lineStyle: { color: '#E8E8ED' } }
     },
     series: [
-      { type: 'radar', name: '错题数', data: [{ value: counts, itemStyle: { color: '#0D9488' }, areaStyle: { color: 'rgba(13,148,136,.18)' } }] },
-      { type: 'radar', name: '平均难度', data: [{ value: diffs, itemStyle: { color: '#EA580C' }, areaStyle: { color: 'rgba(234,88,12,.15)' } }] }
+      { type: 'radar', name: '错题数占比', data: [{ value: countPct, itemStyle: { color: '#0D9488' }, areaStyle: { color: 'rgba(13,148,136,.18)' } }] },
+      { type: 'radar', name: '难度占比', data: [{ value: diffPct, itemStyle: { color: '#EA580C' }, areaStyle: { color: 'rgba(234,88,12,.15)' } }] }
     ]
   })
 }
