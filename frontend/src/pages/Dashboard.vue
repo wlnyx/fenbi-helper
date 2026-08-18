@@ -195,16 +195,17 @@ function renderDonut() {
 function renderHeatmap() {
   const inst = makeInstance('heatmap')
   const hm = data.value.heatmap || {}
-  // 生成近 365 天数据（date → count），供 calendar 坐标系
-  const start = new Date()
-  start.setDate(start.getDate() - 364)
-  const cells = []
+  // 当前年份的日历热力图（range 动态，不硬编码年份）
+  const year = new Date().getFullYear()
   const max = Math.max(...Object.values(hm), 1)
-  for (let i = 0; i < 365; i++) {
-    const d = new Date(start)
-    d.setDate(start.getDate() + i)
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-    cells.push([key, hm[key] || 0])
+  const cells = []
+  for (let m = 0; m < 12; m++) {
+    const daysInMonth = new Date(year, m + 1, 0).getDate()
+    for (let d = 1; d <= daysInMonth; d++) {
+      const key = `${year}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+      const v = hm[key] || 0
+      if (v > 0) cells.push([key, v])
+    }
   }
   inst.setOption({
     animationDuration: 600,
@@ -213,24 +214,24 @@ function renderHeatmap() {
       formatter: (p) => `${p.data[0]}<br/>刷题：${p.data[1]} 题`
     },
     calendar: {
-      top: 30, left: 40, right: 16, bottom: 30,
-      range: [start.getFullYear() + '-' + String(start.getMonth() + 1).padStart(2, '0'), '2026-12-31'],
-      cellSize: ['auto', 14],
+      top: 24, left: 32, right: 12, bottom: 34,
+      range: year,
+      cellSize: ['auto', 11],
       itemStyle: { borderWidth: 2, borderColor: '#fff', borderRadius: 2 },
       splitLine: { lineStyle: { color: '#F0F0F4' } },
-      dayLabel: { fontSize: 9, color: '#86868B' },
-      monthLabel: { fontSize: 10, color: '#86868B' },
+      dayLabel: { fontSize: 8, color: '#86868B' },
+      monthLabel: { fontSize: 9, color: '#86868B' },
       yearLabel: { show: false }
     },
     visualMap: {
       min: 0, max, calculable: false, orient: 'horizontal', left: 'center', bottom: 0,
-      itemWidth: 10, itemHeight: 70,
+      itemWidth: 10, itemHeight: 60,
       inRange: { color: ['#F0FDFA', '#A3DCD6', '#0D9488', '#065F56'] },
       text: ['多', '少'], textStyle: { fontSize: 9, color: '#86868B' }
     },
     series: [{
       type: 'heatmap', coordinateSystem: 'calendar',
-      data: cells.filter(c => c[1] > 0),
+      data: cells,
       itemStyle: { borderColor: '#fff', borderWidth: 1, borderRadius: 2 }
     }]
   })
@@ -270,10 +271,12 @@ function renderWaffle() {
       itemStyle: { borderColor: '#fff', borderWidth: 1.5, borderRadius: 2 }
     }]
   })
-  // 图例（graphic 不支持 calc()，用 'bottom' 定位）
+  // 图例（按容器宽度动态分布，避免窄卡片溢出）
+  const w = inst.getWidth() || 400
+  const gap = Math.min(96, Math.floor((w - 16) / Math.max(statesData.length, 1)))
   inst.setOption({
     graphic: statesData.map((s, i) => ({
-      type: 'group', left: 8 + i * 88, bottom: 4,
+      type: 'group', left: 8 + i * gap, bottom: 4,
       children: [
         { type: 'rect', shape: { x: 0, y: 0, width: 10, height: 10 }, style: { fill: s.color } },
         { type: 'text', left: 14, top: -2, style: { text: `${s.label} ${s.value}`, fill: '#86868B', fontSize: 10 } }
@@ -290,14 +293,17 @@ function renderRadar() {
   // 统一量纲到 0-100：错题数按峰值归一，难度按 10 分制归一
   const countPct = ms.map(m => Math.round(m.count / maxCount * 100))
   const diffPct = ms.map(m => Math.min(100, Math.round(m.avgDiff / 10 * 100)))
+  const byName = {}
+  ms.forEach((m, i) => { byName[m.module] = { m, countPct: countPct[i], diffPct: diffPct[i] } })
   inst.setOption({
     animationDuration: 800,
     tooltip: {
       ...TOOLTIP_STYLE, trigger: 'item',
       formatter: (p) => {
-        const i = p.dataIndex
-        const m = ms[i]
-        return `${m.module}<br/>错题数：${m.count}<br/>平均难度：${m.avgDiff}/10`
+        // radar 的 p.name 是指标轴名（模块名），单数据项时 dataIndex 恒为 0，须用 name 匹配
+        const hit = byName[p.name]
+        if (!hit) return p.name
+        return `${p.name}<br/>错题数：${hit.m.count}<br/>平均难度：${hit.m.avgDiff}/10<br/>占比：${hit.countPct}%`
       }
     },
     legend: { data: ['错题数占比', '难度占比'], top: 0, icon: 'circle', itemWidth: 8, textStyle: { fontSize: 11 } },
@@ -317,14 +323,21 @@ function renderRadar() {
 }
 
 function renderAll() {
-  // 清理旧实例
-  instances.forEach(i => i.dispose())
+  // 复用实例，notMerge 全量替换配置（避免 dispose 重建闪烁）
   instances = []
   renderTrend()
   renderDonut()
   renderHeatmap()
   renderWaffle()
   renderRadar()
+}
+
+let resizeTimer = null
+function onResize() {
+  clearTimeout(resizeTimer)
+  resizeTimer = setTimeout(() => {
+    instances.forEach(i => i.resize())
+  }, 150)
 }
 
 async function load() {
@@ -343,8 +356,14 @@ function reload() {
   load()
 }
 
-onMounted(load)
-onUnmounted(() => instances.forEach(i => i.dispose()))
+onMounted(() => {
+  load()
+  window.addEventListener('resize', onResize)
+})
+onUnmounted(() => {
+  window.removeEventListener('resize', onResize)
+  instances.forEach(i => i.dispose())
+})
 </script>
 
 <style scoped>

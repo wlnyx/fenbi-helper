@@ -357,14 +357,14 @@ func (s *Server) dashboardTrend() []interface{} {
 	}
 	out := make([]interface{}, 30)
 	for i := 0; i < 30; i++ {
-		rate := 0.0
+		var rate interface{} // nil → 折线断点（无练习日不显示 0%）
 		if answerSum[i] > 0 {
-			rate = correctSum[i] / float64(answerSum[i]) * 100
+			rate = round1(correctSum[i] / float64(answerSum[i]) * 100)
 		}
 		out[i] = map[string]interface{}{
 			"date":        days[i].Format("01-02"),
 			"count":       counts[i],
-			"correctRate": round1(rate),
+			"correctRate": rate,
 		}
 	}
 	s.cache.SetWithTTL(key, out, 60*time.Second)
